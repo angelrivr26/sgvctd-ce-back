@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug backend (development)",
+      "program": "${workspaceFolder}/src/index.js",
+      "runtimeArgs": ["--inspect-brk=127.0.0.1:9229"],
+      "attachSimplePort": 9229,
+      "autoAttachChildProcesses": false,
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnSessionStart",
+      "outputCapture": "std",
+      "stopOnEntry": true,
+      "trace": false,
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

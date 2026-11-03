@@ -1,0 +1,5 @@
+{
+  "terminal.integrated.env.windows": {
+    "PATH": "${workspaceFolder}\\.tools\\node-v24.22.2-win-x64;${env:PATH}"
+  }
+}

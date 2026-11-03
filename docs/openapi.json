@@ -1,0 +1,404 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Comprobantes SERNANP - Pruebas",
+    "version": "0.1.0",
+    "description": "Proveedor fiscal simulado. Sin validez tributaria. Recepcion persistente; procesamiento asincrono."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "integrationKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "comprobantes_session"
+      }
+    },
+    "schemas": {
+      "Compra": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "eventoId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "origen": {
+            "type": "string",
+            "const": "BOLETOS"
+          },
+          "compraId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "estadoPago": {
+            "type": "string",
+            "const": "PAGADO"
+          },
+          "modalidad": {
+            "type": "string",
+            "enum": ["NORMAL", "EXPRESS"]
+          },
+          "tipoComprobante": {
+            "type": "string",
+            "enum": ["BOLETA", "FACTURA"]
+          },
+          "fechaPago": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "moneda": {
+            "type": "string",
+            "const": "PEN"
+          },
+          "emisor": {
+            "type": "object",
+            "properties": {
+              "ruc": {
+                "type": "string",
+                "pattern": "^\\d{11}$"
+              },
+              "razonSocial": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "direccion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 250
+              }
+            },
+            "required": ["ruc", "razonSocial", "direccion"],
+            "additionalProperties": false
+          },
+          "comprador": {
+            "type": "object",
+            "properties": {
+              "tipoDocumento": {
+                "type": "string",
+                "enum": ["DNI", "RUC", "CE", "PASAPORTE", "OTRO"]
+              },
+              "numeroDocumento": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "nombre": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "direccion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 250
+              },
+              "correo": {
+                "type": "string",
+                "maxLength": 254,
+                "format": "email",
+                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              }
+            },
+            "required": ["tipoDocumento", "numeroDocumento", "nombre", "direccion", "correo"],
+            "additionalProperties": false
+          },
+          "detalle": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "boletoIds": {
+                  "minItems": 1,
+                  "maxItems": 200,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                },
+                "descripcion": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 250
+                },
+                "cantidad": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "precioUnitario": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
+                },
+                "descuento": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
+                },
+                "impuesto": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
+                },
+                "total": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
+                },
+                "afectacion": {
+                  "type": "string",
+                  "enum": ["POR_DEFINIR", "GRAVADO", "EXONERADO", "INAFECTO", "GRATUITO"]
+                }
+              },
+              "required": [
+                "boletoIds",
+                "descripcion",
+                "cantidad",
+                "precioUnitario",
+                "descuento",
+                "impuesto",
+                "total",
+                "afectacion"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
+          },
+          "escenarioPrueba": {
+            "default": "EXITO",
+            "type": "string",
+            "enum": ["EXITO", "RECHAZO", "ERROR_TEMPORAL", "RESPUESTA_INCIERTA", "DEMORADO"]
+          }
+        },
+        "required": [
+          "eventoId",
+          "origen",
+          "compraId",
+          "estadoPago",
+          "modalidad",
+          "tipoComprobante",
+          "fechaPago",
+          "moneda",
+          "emisor",
+          "comprador",
+          "detalle",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "EstadoDocumentos": {
+        "type": "string",
+        "enum": ["NO_HABILITADOS", "PENDIENTES", "GENERANDO", "DISPONIBLES", "ERROR"],
+        "description": "Independiente del estado fiscal. ERROR conserva la emision confirmada para recuperar documentos."
+      },
+      "SeguimientoComprobante": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "estado": {
+            "enum": ["PENDIENTE", "PROCESANDO", "PROCESADO", "REQUIERE_ATENCION"]
+          },
+          "estadoFiscal": {
+            "type": "string",
+            "description": "SIMULADO no representa aceptacion SUNAT."
+          },
+          "estadoDocumentos": {
+            "$ref": "#/components/schemas/EstadoDocumentos"
+          },
+          "versionPlantilla": {
+            "type": ["string", "null"]
+          },
+          "fechaEmision": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "estado",
+          "estadoFiscal",
+          "estadoDocumentos",
+          "versionPlantilla",
+          "fechaEmision"
+        ]
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Estado del servicio y de la base de datos",
+        "responses": {
+          "200": {
+            "description": "Disponible"
+          }
+        }
+      }
+    },
+    "/api/v1/integraciones/boletos/compras": {
+      "post": {
+        "summary": "Registrar compra facturable, idempotente por evento y compra",
+        "security": [
+          {
+            "integrationKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Compra"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Solicitud guardada; no significa comprobante emitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "duplicado": {
+                      "type": "boolean"
+                    },
+                    "comprobante": {
+                      "$ref": "#/components/schemas/SeguimientoComprobante"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "409": {
+            "description": "Conflicto de idempotencia o estado"
+          },
+          "422": {
+            "description": "Datos invalidos"
+          },
+          "429": {
+            "description": "Reintentar segun Retry-After"
+          }
+        }
+      }
+    },
+    "/api/v1/integraciones/boletos/comprobantes/{id}": {
+      "get": {
+        "summary": "Consultar resultado por identificador",
+        "security": [
+          {
+            "integrationKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del procesamiento y documentos; incluye los campos de seguimiento y el detalle de compra/documentos/entregas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeguimientoComprobante"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "409": {
+            "description": "Conflicto de idempotencia o estado"
+          },
+          "422": {
+            "description": "Datos invalidos"
+          },
+          "429": {
+            "description": "Reintentar segun Retry-After"
+          }
+        }
+      }
+    },
+    "/api/v1/integraciones/boletos/comprobantes/{id}/documentos/{tipo}": {
+      "get": {
+        "summary": "Descargar documento con autenticacion de integracion",
+        "security": [
+          {
+            "integrationKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": ["PDF", "XML", "CDR"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archivo simulado; X-Content-SHA256 permite comprobar integridad"
+          },
+          "401": {
+            "description": "No autorizado"
+          },
+          "409": {
+            "description": "Conflicto de idempotencia o estado"
+          },
+          "422": {
+            "description": "Datos invalidos"
+          },
+          "429": {
+            "description": "Reintentar segun Retry-After"
+          }
+        }
+      }
+    }
+  }
+}

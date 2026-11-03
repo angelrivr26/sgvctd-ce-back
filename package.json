@@ -1,0 +1,52 @@
+{
+  "name": "sernanp-backend-comprobantes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Integracion y gestion de comprobantes electronicos en ambiente de pruebas",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "worker": "node src/worker.js",
+    "setup:local": "node scripts/setup-local.js",
+    "db:configurar-boletos": "node scripts/configurar-bd-boletos.js",
+    "db:migrate": "node scripts/migrar-bd.js",
+    "db:script": "node scripts/generar-sql-bd.js",
+    "sunat:beta:diagnostico": "node scripts/probar-sunat-beta.js --diagnostico",
+    "sunat:beta:preparar": "node scripts/probar-sunat-beta.js",
+    "sunat:beta:enviar": "node scripts/probar-sunat-beta.js --enviar",
+    "sunat:beta:recuperar": "node scripts/recuperar-sunat-beta.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "check": "node scripts/check.js",
+    "format": "prettier --write src tests scripts docs *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
+    "format:check": "prettier --check src tests scripts docs *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
+    "audit:dependencies": "npm audit --audit-level=low",
+    "audit:projects": "node scripts/auditar-dependencias.js",
+    "docs:api": "node scripts/generar-openapi.js"
+  },
+  "overrides": {
+    "sequelize": {
+      "uuid": "11.1.1"
+    }
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "@xmldom/xmldom": "0.9.12",
+    "cors": "2.8.6",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.2",
+    "fflate": "0.8.3",
+    "helmet": "8.3.0",
+    "pdf-lib": "1.17.1",
+    "pg": "8.23.1",
+    "sequelize": "6.37.8",
+    "xml-crypto": "6.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

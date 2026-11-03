@@ -1,0 +1,46 @@
+{
+  "fechaLima": "2026-11-02 16:51:03",
+  "node": "v24.22.2",
+  "proyectos": [
+    {
+      "proyecto": "backend-comprobantes",
+      "vulnerabilidades": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencias": {
+        "prod": 115,
+        "dev": 1,
+        "optional": 1,
+        "peer": 0,
+        "peerOptional": 0,
+        "total": 116
+      },
+      "avisos": {}
+    },
+    {
+      "proyecto": "frontend-comprobantes",
+      "vulnerabilidades": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencias": {
+        "prod": 11,
+        "dev": 352,
+        "optional": 150,
+        "peer": 3,
+        "peerOptional": 0,
+        "total": 362
+      },
+      "avisos": {}
+    }
+  ]
+}
