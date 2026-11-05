@@ -11,10 +11,10 @@ const errorResponses = {
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
-    title: 'Comprobantes SERNANP - Pruebas',
+    title: 'Comprobantes SERNANP',
     version: '0.1.0',
     description:
-      'Proveedor fiscal simulado. Sin validez tributaria. Recepcion persistente; procesamiento asincrono.',
+      'Flujo unico SUNAT para beta o produccion. Recepcion persistente y procesamiento asincrono.',
   },
   servers: [{ url: '/' }],
   components: {
@@ -35,7 +35,22 @@ export const openApiDocument = {
         properties: {
           id: { type: 'string', format: 'uuid' },
           estado: { enum: ['PENDIENTE', 'PROCESANDO', 'PROCESADO', 'REQUIERE_ATENCION'] },
-          estadoFiscal: { type: 'string', description: 'SIMULADO no representa aceptacion SUNAT.' },
+          estadoFiscal: {
+            type: 'string',
+            description: 'ACEPTADO solo despues de validar y persistir la CDR codigo 0.',
+          },
+          respuestaSunat: {
+            type: ['object', 'null'],
+            description:
+              'Null sin respuesta acreditada. Informa ambiente, codigo, descripcion y fecha tras persistir SOAP/CDR.',
+            properties: {
+              ambiente: { enum: ['beta', 'production'] },
+              codigo: { type: 'string' },
+              descripcion: { type: 'string' },
+              fechaRespuesta: { type: 'string', format: 'date-time' },
+            },
+            required: ['ambiente', 'codigo', 'descripcion', 'fechaRespuesta'],
+          },
           estadoDocumentos: { $ref: '#/components/schemas/EstadoDocumentos' },
           versionPlantilla: { type: ['string', 'null'] },
           fechaEmision: { type: ['string', 'null'], format: 'date-time' },
@@ -104,7 +119,7 @@ export const openApiDocument = {
           { name: 'tipo', in: 'path', required: true, schema: { enum: ['PDF', 'XML', 'CDR'] } },
         ],
         responses: {
-          200: { description: 'Archivo simulado; X-Content-SHA256 permite comprobar integridad' },
+          200: { description: 'Archivo emitido; X-Content-SHA256 permite comprobar integridad' },
           ...errorResponses,
         },
       },

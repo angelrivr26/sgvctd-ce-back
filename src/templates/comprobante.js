@@ -1,17 +1,17 @@
-export const templateVersion = 'simulado-v2';
-
-/** Presentacion versionada: consume la compra inmutable y el resultado persistido. */
-export function comprobantePruebaTemplate(record) {
+/** Presentacion unica; solo la etiqueta de validez cambia segun la respuesta SUNAT. */
+export function comprobanteTemplate(record) {
   const data = record.payload;
   const result = record.resultado_emision;
+  const beta = result.respuestaSunat.ambiente === 'beta';
   const emitted = new Intl.DateTimeFormat('es-PE', {
     timeZone: 'America/Lima',
     dateStyle: 'short',
     timeStyle: 'medium',
   }).format(new Date(result.fechaEmision));
+  const documentName = data.tipoComprobante === 'FACTURA' ? 'FACTURA' : 'BOLETA DE VENTA';
   return {
-    version: templateVersion,
-    title: `${data.tipoComprobante === 'FACTURA' ? 'FACTURA' : 'BOLETA DE VENTA'} DE PRUEBA`,
+    version: `sunat-${result.respuestaSunat.ambiente}-v1`,
+    title: beta ? `${documentName} DE PRUEBA` : documentName,
     reference: `${result.serie}-${result.numero}`,
     sections: [
       {
@@ -31,7 +31,7 @@ export function comprobantePruebaTemplate(record) {
         lines: [
           data.comprador.nombre,
           `${data.comprador.tipoDocumento}: ${data.comprador.numeroDocumento}`,
-          data.comprador.direccion,
+          ...(data.comprador.direccion ? [data.comprador.direccion] : []),
         ],
       },
     ],
@@ -45,6 +45,8 @@ export function comprobantePruebaTemplate(record) {
       amount: `${data.moneda} ${item.total}`,
     })),
     total: `TOTAL ${data.moneda} ${data.total}`,
-    footer: 'SIMULADO. Sin firma digital ni QR fiscal. No acredita aceptacion ante SUNAT.',
+    footer: beta
+      ? 'ACEPTADO POR SUNAT BETA. DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA.'
+      : 'COMPROBANTE ELECTRONICO ENVIADO A SUNAT.',
   };
 }

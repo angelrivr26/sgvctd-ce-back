@@ -33,7 +33,7 @@ export const compraSchema = z
         tipoDocumento: z.enum(['DNI', 'RUC', 'CE', 'PASAPORTE', 'OTRO']),
         numeroDocumento: text(20),
         nombre: text(200),
-        direccion: text(250),
+        direccion: z.string().trim().max(250).optional(),
         correo: z.email().max(254),
       })
       .strict(),
@@ -42,6 +42,9 @@ export const compraSchema = z
         z
           .object({
             boletoIds: z.array(identifier).min(1).max(200),
+            // Campo nuevo desde Boletos. Es opcional durante la transicion para
+            // aceptar snapshots antiguos; las compras nuevas siempre lo envian.
+            nombreAnp: text(200).optional(),
             descripcion: text(250),
             cantidad: z.number().int().min(1).max(200),
             precioUnitario: money,
@@ -55,13 +58,13 @@ export const compraSchema = z
       .min(1)
       .max(200),
     total: money,
-    escenarioPrueba: z
-      .enum(['EXITO', 'RECHAZO', 'ERROR_TEMPORAL', 'RESPUESTA_INCIERTA', 'DEMORADO'])
-      .default('EXITO'),
   })
   .strict()
   .superRefine((value, context) => {
     const issue = (path, message) => context.addIssue({ code: 'custom', path, message });
+    if (value.tipoComprobante === 'FACTURA' && !value.comprador.direccion) {
+      issue(['comprador', 'direccion'], 'La factura requiere direccion del comprador.');
+    }
     if (
       value.tipoComprobante === 'FACTURA' &&
       (value.comprador.tipoDocumento !== 'RUC' || !/^\d{11}$/.test(value.comprador.numeroDocumento))

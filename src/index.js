@@ -1,18 +1,22 @@
 import { loadConfig } from './config/env.js';
 import { createDatabase } from './database/database.js';
-import { migrate } from './database/migrate.js';
+import { verifyDatabaseSchema } from './database/schema.js';
 import { createApplicationServices } from './services/application.service.js';
 import { createApp } from './app.js';
 
+// ARRANQUE A: leer configuracion. No abre red ni modifica la base.
 const config = loadConfig();
+// ARRANQUE B: conectar y verificar en solo lectura el esquema creado por el DBA.
 const database = await createDatabase(config);
-await migrate(database);
+await verifyDatabaseSchema(database);
+// ARRANQUE C: componer servicios y rutas en un unico punto.
 const services = createApplicationServices(database, config);
 const app = createApp({ services, database, config });
+// ARRANQUE D: aceptar HTTP e iniciar workers si estan habilitados.
 const server = app.listen(config.port, config.host);
 server.once('listening', () => {
   console.log(
-    `Comprobantes: http://${config.host}:${config.port} | ambiente de PRUEBAS | proveedor simulado`,
+    `Comprobantes: http://${config.host}:${config.port} | SUNAT ${config.sunat.environment}`,
   );
   if (config.workersEnabled) services.worker.start();
 });

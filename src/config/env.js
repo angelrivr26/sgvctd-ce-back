@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { databaseSchema } from '../database/schema.js';
+import { parseSunatConfig } from './sunat.js';
 
 export function loadConfig(overrides = {}) {
   const envPath = resolve('.env');
@@ -29,7 +30,7 @@ export function loadConfig(overrides = {}) {
     documentDirectory: resolve(env.DOCUMENT_DIRECTORY || '.local/documentos'),
     mailDirectory: resolve(env.MAIL_DIRECTORY || '.local/correos'),
     callbackDirectory: resolve(env.CALLBACK_DIRECTORY || '.local/notificaciones'),
-    provider: env.FISCAL_PROVIDER || 'simulado',
+    sunat: parseSunatConfig(env),
     integrationKey: env.INTEGRATION_API_KEY || '',
     adminUsername: env.ADMIN_USERNAME || 'contador',
     adminPasswordHash: env.ADMIN_PASSWORD_HASH || '',
@@ -47,10 +48,10 @@ export function loadConfig(overrides = {}) {
   if (config.databaseDriver === 'postgres' && !config.databaseUrl)
     throw new Error('Falta DATABASE_URL.');
   config.databaseSchema = databaseSchema(config);
-  if (config.provider !== 'simulado')
-    throw new Error('El conector fiscal real aun no esta implementado.');
-  if (config.environment === 'production')
-    throw new Error('Esta entrega es exclusiva para pruebas; no habilita emision fiscal real.');
+  if (config.leaseSeconds * 1000 <= config.sunat.timeoutMs + 5000)
+    throw new Error('WORKER_LEASE_SECONDS debe superar SUNAT_TIMEOUT_MS en mas de 5 segundos.');
+  if (config.environment === 'production' && config.sunat.environment !== 'production')
+    throw new Error('NODE_ENV=production requiere SUNAT_ENV=production.');
   if (config.integrationKey.length < 32 || !config.adminPasswordHash)
     throw new Error('Ejecute npm run setup:local para configurar el acceso.');
   if (config.callbackUrl) {

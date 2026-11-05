@@ -1,29 +1,14 @@
 import { digest } from '../utils/security.js';
+import { validateEmissionResult } from '../validators/resultado-emision.validator.js';
 
 /** Genera documentos despues de persistir la confirmacion de emision. */
 export function createDocumentosService({ files, pdf }) {
   return {
     async generate(record) {
-      const result = record.resultado_emision;
-      if (
-        result?.estado !== 'COMPLETADO' ||
-        result.estadoFiscal !== 'SIMULADO' ||
-        result.simulado !== true
-      )
-        throw new Error('La generacion requiere una emision simulada confirmada y persistida.');
+      // FLUJO 14/18: validar originales SUNAT, crear PDF y guardar los tres archivos.
+      // CONTINUA EN FLUJO 15: comprobante.model.complete().
+      const result = validateEmissionResult(record.resultado_emision, record.id);
       const originals = result.documentos;
-      if (
-        !Array.isArray(originals) ||
-        originals.length !== 2 ||
-        !['XML', 'CDR'].every(
-          (type) =>
-            originals.filter(
-              (doc) =>
-                doc.tipo === type && typeof doc.contenido === 'string' && doc.contenido.length > 0,
-            ).length === 1,
-        )
-      )
-        throw new Error('El proveedor no entrego los documentos simulados esperados.');
       const rendered = await pdf.render(record);
       const contents = [
         ...originals.map((doc) => ({

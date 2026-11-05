@@ -16,6 +16,7 @@ export function presentComprobante(record) {
     estadoDocumentos: record.estado_documentos,
     versionPlantilla: record.version_plantilla,
     fechaEmision: record.resultado_emision?.fechaEmision ?? null,
+    respuestaSunat: record.resultado_emision?.respuestaSunat ?? null,
     serie: record.serie,
     numero: record.numero === null ? null : String(record.numero),
     intentos: record.intentos,
@@ -23,13 +24,15 @@ export function presentComprobante(record) {
     estadoCorreo: record.estado_correo ?? null,
     creadoEn: record.creado_en,
     actualizadoEn: record.actualizado_en,
-    simulado: true,
+    simulado: false,
   };
 }
 
 export function createComprobanteService(model, archivo) {
   return {
     async receive(input, actor) {
+      // FLUJO 03/18: validar la compra antes de tocar la base.
+      // CONTINUA EN FLUJO 04: comprobante.model.receive().
       const payload = compraSchema.parse(input);
       const { record, duplicate } = await model.receive(payload, actor);
       return { comprobante: presentComprobante(record), duplicado: duplicate };

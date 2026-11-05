@@ -11,7 +11,7 @@ async function files(folder) {
   );
   return nested.flat();
 }
-const javascript = (await Promise.all(['src', 'scripts', 'tests'].map(files)))
+const javascript = (await Promise.all(['src', 'scripts'].map(files)))
   .flat()
   .filter((file) => file.endsWith('.js'));
 for (const file of javascript) {

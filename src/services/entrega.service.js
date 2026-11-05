@@ -1,6 +1,8 @@
 export function createEntregaService({ model, comprobantes, correo, integracion, config }) {
   return {
     async process(job) {
+      // FLUJO 17/18: elegir exactamente un destino segun el tipo del trabajo.
+      // CONTINUA EN FLUJO 18: correo.send() o integracion.notify().
       try {
         const detail = await comprobantes.detail(job.comprobante_id);
         const state =

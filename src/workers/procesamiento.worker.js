@@ -11,10 +11,13 @@ export function createWorker({
   const active = new Set();
   let stopped = true;
   async function emit() {
+    // FLUJO 05/18: reservar y procesar compras pendientes.
     const purchases = await comprobanteModel.claim(config.workerConcurrency, config.leaseSeconds);
     await Promise.all(purchases.map((record) => procesamiento.process(record)));
   }
   async function deliver() {
+    // FLUJO 16/18: reservar entregas creadas al aceptar o rechazar una emision.
+    // CONTINUA EN FLUJO 17: entrega.service.process().
     const notifications = await entregaModel.claim(config.workerConcurrency, config.leaseSeconds);
     await Promise.all(notifications.map((job) => entregas.process(job)));
   }

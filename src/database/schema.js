@@ -28,3 +28,33 @@ export function databaseSchema(config) {
 }
 
 export const quoteSchema = (schema) => `"${schema}"`;
+
+/** El DBA administra el esquema; la aplicacion solo comprueba que este completo. */
+export async function verifyDatabaseSchema(database) {
+  const requiredTables = [
+    'auditoria',
+    'comprobantes',
+    'documentos',
+    'entregas',
+    'sesiones',
+    'sunat_control',
+    'sunat_envios',
+  ];
+  const tables = await database.query(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema=$1 AND table_type='BASE TABLE'`,
+    [database.schema],
+  );
+  const existing = new Set(tables.map((row) => row.table_name));
+  const missing = requiredTables.filter((table) => !existing.has(table));
+  const sequences = await database.query(
+    `SELECT sequence_name FROM information_schema.sequences
+     WHERE sequence_schema=$1 AND sequence_name='sunat_numero_seq'`,
+    [database.schema],
+  );
+  if (!sequences.length) missing.push('sunat_numero_seq');
+  if (missing.length)
+    throw new Error(
+      `Esquema ${database.schema} incompleto. El DBA debe ejecutar sql/001_esquema.sql. Faltan: ${missing.join(', ')}.`,
+    );
+}

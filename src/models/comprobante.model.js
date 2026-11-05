@@ -3,6 +3,17 @@ import { canonicalJson, digest } from '../utils/security.js';
 import { AppError } from '../utils/errors.js';
 import { validateEmissionResult } from '../validators/resultado-emision.validator.js';
 
+function validateDocumentSet(documents, templateVersion) {
+  const types = documents.map((document) => document.tipo);
+  if (
+    documents.length !== 3 ||
+    new Set(types).size !== 3 ||
+    !['PDF', 'XML', 'CDR'].every((type) => types.includes(type)) ||
+    !templateVersion
+  )
+    throw new Error('El conjunto de documentos esta incompleto.');
+}
+
 export function createComprobanteModel(database) {
   const audit = (db, id, action, actor, detail = '') =>
     db.query(
@@ -23,6 +34,8 @@ export function createComprobanteModel(database) {
   return {
     get,
     async receive(payload, actor = 'BOLETOS') {
+      // FLUJO 04/18: guardar una sola vez por eventoId y compraId.
+      // TERMINA RECEPCION: controller devuelve HTTP 202; el worker retoma en FLUJO 05.
       const { eventoId, ...businessData } = payload;
       const hash = digest(canonicalJson(businessData));
       return database.transaction(async (tx) => {
@@ -53,6 +66,7 @@ export function createComprobanteModel(database) {
         return { record: existing[0], duplicate: true };
       });
     },
+    // CONSULTAS: list/detail no avanzan el flujo; solo presentan el estado actual.
     async list(filters) {
       const values = [];
       const clauses = [];
@@ -110,6 +124,8 @@ export function createComprobanteModel(database) {
       return { record, documents, deliveries, history };
     },
     async claim(limit, leaseSeconds) {
+      // FLUJO 05/18: reservar compras pendientes sin que dos workers tomen la misma.
+      // CONTINUA EN FLUJO 06: procesamiento.service.process().
       const token = randomUUID();
       return database.transaction((tx) =>
         tx.query(
@@ -126,6 +142,8 @@ export function createComprobanteModel(database) {
       );
     },
     async saveEmission(record, result) {
+      // FLUJO 12/18 (ACEPTADO): persistir CDR 0 antes de generar archivos.
+      // CONTINUA EN FLUJO 13: startDocuments().
       const confirmed = validateEmissionResult(result, record.id);
       return database.transaction(async (tx) => {
         const updated = await tx.query(
@@ -146,23 +164,71 @@ export function createComprobanteModel(database) {
         await audit(
           tx,
           record.id,
-          'EMISION_SIMULADA_CONFIRMADA',
+          'EMISION_SUNAT_CONFIRMADA',
           'WORKER',
           `${confirmed.serie}-${confirmed.numero}`,
         );
         return updated[0];
       });
     },
+    async saveRejection(record, result) {
+      // FLUJO 12/18 (RECHAZADO): cerrar la emision y crear callback a Boletos.
+      // SALTA A FLUJO 16: no genera PDF ni correo.
+      const rejected = validateEmissionResult(result, record.id, 'RECHAZADO');
+      return database.transaction(async (tx) => {
+        const saved = await tx.query(
+          `UPDATE comprobantes SET resultado_emision=$3::jsonb,estado_fiscal=$4,
+           serie=$5,numero=$6,estado='REQUIERE_ATENCION',estado_documentos='NO_HABILITADOS',
+           ultimo_error=$7,reserva_hasta=NULL,reserva_token=NULL,actualizado_en=now()
+           WHERE id=$1 AND reserva_token=$2 AND estado='PROCESANDO' AND resultado_emision IS NULL RETURNING id`,
+          [
+            record.id,
+            record.reserva_token,
+            JSON.stringify(rejected),
+            rejected.estadoFiscal,
+            rejected.serie,
+            rejected.numero,
+            `SUNAT ${rejected.respuestaSunat.codigo}: ${rejected.respuestaSunat.descripcion}`.slice(
+              0,
+              500,
+            ),
+          ],
+        );
+        if (!saved.length) return false;
+        await delivery(tx, record.id, 'BOLETOS');
+        await audit(
+          tx,
+          record.id,
+          'RESPUESTA_SUNAT_NO_ACEPTADA',
+          'WORKER',
+          rejected.respuestaSunat.codigo,
+        );
+        return true;
+      });
+    },
+    async defer(record) {
+      // ESPERA CONTROLADA: libera la reserva sin consumir un intento.
+      await database.query(
+        `UPDATE comprobantes SET estado='PENDIENTE',intentos=GREATEST(0,intentos-1),
+         proximo_intento=now()+interval '5 seconds',reserva_hasta=NULL,reserva_token=NULL
+         WHERE id=$1 AND reserva_token=$2 AND estado='PROCESANDO' RETURNING id`,
+        [record.id, record.reserva_token],
+      );
+    },
     async startDocuments(record) {
+      // FLUJO 13/18: obtener permiso exclusivo para generar documentos.
+      // CONTINUA EN FLUJO 14: documentos.service.generate().
       const rows = await database.query(
         `UPDATE comprobantes SET estado_documentos='GENERANDO',actualizado_en=now()
          WHERE id=$1 AND reserva_token=$2 AND estado='PROCESANDO'
-           AND resultado_emision IS NOT NULL RETURNING *`,
+           AND resultado_emision->>'estado'='COMPLETADO' RETURNING *`,
         [record.id, record.reserva_token],
       );
       return rows[0] ?? null;
     },
     async complete(record, documents, templateVersion) {
+      // FLUJO 15/18: registrar PDF/XML/CDR y crear trabajos de entrega.
+      // CONTINUA EN FLUJO 16: procesamiento.worker.deliver().
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE comprobantes SET estado='PROCESADO',estado_documentos='DISPONIBLES',
@@ -173,14 +239,7 @@ export function createComprobanteModel(database) {
           [record.id, record.reserva_token, templateVersion],
         );
         if (!updated.length) return false;
-        if (
-          documents.length !== 3 ||
-          !['PDF', 'XML', 'CDR'].every(
-            (type) => documents.filter((document) => document.tipo === type).length === 1,
-          ) ||
-          !templateVersion
-        )
-          throw new Error('El conjunto de documentos esta incompleto.');
+        validateDocumentSet(documents, templateVersion);
         for (const document of documents) {
           await tx.query(
             `INSERT INTO documentos(id,comprobante_id,tipo,clave,sha256,bytes)
@@ -209,6 +268,7 @@ export function createComprobanteModel(database) {
       });
     },
     async fail(record, { message, retry, uncertain = false, fiscalState, delaySeconds = 5 }) {
+      // RUTA DE ERROR: conserva el avance y decide reintento o atencion manual.
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE comprobantes SET estado=$3,
@@ -242,7 +302,8 @@ export function createComprobanteModel(database) {
         const updated = await tx.query(
           `UPDATE comprobantes SET estado='PENDIENTE',intentos=0,
           proximo_intento=now(),ultimo_error=NULL,actualizado_en=now()
-          WHERE id=$1 AND estado='REQUIERE_ATENCION' RETURNING *`,
+          WHERE id=$1 AND estado='REQUIERE_ATENCION'
+          AND COALESCE(resultado_emision->>'estado','')<>'RECHAZADO' RETURNING *`,
           [id],
         );
         if (!updated.length) {
@@ -250,7 +311,7 @@ export function createComprobanteModel(database) {
           throw new AppError(
             409,
             'ESTADO_INVALIDO',
-            'Solo se pueden reintentar comprobantes que requieren atencion.',
+            'Solo se pueden reintentar incidencias recuperables. Un rechazo SUNAT persistido requiere revisar los datos de origen.',
           );
         }
         await audit(tx, id, 'REINTENTO_MANUAL', actor);

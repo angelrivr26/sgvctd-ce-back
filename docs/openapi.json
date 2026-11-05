@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Comprobantes SERNANP - Pruebas",
+    "title": "Comprobantes SERNANP",
     "version": "0.1.0",
-    "description": "Proveedor fiscal simulado. Sin validez tributaria. Recepcion persistente; procesamiento asincrono."
+    "description": "Flujo unico SUNAT para beta o produccion. Recepcion persistente y procesamiento asincrono."
   },
   "servers": [
     {
@@ -104,7 +104,6 @@
               },
               "direccion": {
                 "type": "string",
-                "minLength": 1,
                 "maxLength": 250
               },
               "correo": {
@@ -114,7 +113,7 @@
                 "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
               }
             },
-            "required": ["tipoDocumento", "numeroDocumento", "nombre", "direccion", "correo"],
+            "required": ["tipoDocumento", "numeroDocumento", "nombre", "correo"],
             "additionalProperties": false
           },
           "detalle": {
@@ -134,6 +133,11 @@
                     "maxLength": 64,
                     "pattern": "^[A-Za-z0-9_-]+$"
                   }
+                },
+                "nombreAnp": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
                 },
                 "descripcion": {
                   "type": "string",
@@ -182,11 +186,6 @@
           "total": {
             "type": "string",
             "pattern": "^(0|[1-9]\\d{0,6})\\.\\d{2}$"
-          },
-          "escenarioPrueba": {
-            "default": "EXITO",
-            "type": "string",
-            "enum": ["EXITO", "RECHAZO", "ERROR_TEMPORAL", "RESPUESTA_INCIERTA", "DEMORADO"]
           }
         },
         "required": [
@@ -222,7 +221,27 @@
           },
           "estadoFiscal": {
             "type": "string",
-            "description": "SIMULADO no representa aceptacion SUNAT."
+            "description": "ACEPTADO solo despues de validar y persistir la CDR codigo 0."
+          },
+          "respuestaSunat": {
+            "type": ["object", "null"],
+            "description": "Null sin respuesta acreditada. Informa ambiente, codigo, descripcion y fecha tras persistir SOAP/CDR.",
+            "properties": {
+              "ambiente": {
+                "enum": ["beta", "production"]
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "descripcion": {
+                "type": "string"
+              },
+              "fechaRespuesta": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["ambiente", "codigo", "descripcion", "fechaRespuesta"]
           },
           "estadoDocumentos": {
             "$ref": "#/components/schemas/EstadoDocumentos"
@@ -383,7 +402,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Archivo simulado; X-Content-SHA256 permite comprobar integridad"
+            "description": "Archivo emitido; X-Content-SHA256 permite comprobar integridad"
           },
           "401": {
             "description": "No autorizado"

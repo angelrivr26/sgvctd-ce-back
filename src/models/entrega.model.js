@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 export function createEntregaModel(database) {
   return {
     claim(limit, leaseSeconds) {
+      // FLUJO 16/18: reservar callbacks/correos sin duplicar su ejecucion.
       return database.transaction((tx) =>
         tx.query(
           `WITH candidates AS (
@@ -17,6 +18,7 @@ export function createEntregaModel(database) {
       );
     },
     complete(job, state) {
+      // FIN DEL FLUJO 18: guardar el resultado de la entrega y auditarlo.
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE entregas SET estado=$3,ultimo_error=NULL,
@@ -33,6 +35,7 @@ export function createEntregaModel(database) {
       });
     },
     fail(job, retry, delaySeconds) {
+      // RUTA DE ERROR DE ENTREGA: no cambia el resultado fiscal.
       return database.query(
         `UPDATE entregas SET estado=$3,ultimo_error=$4,
         proximo_intento=now()+($5::int * interval '1 second'),reserva_token=NULL,reserva_hasta=NULL,actualizado_en=now()

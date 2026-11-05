@@ -4,6 +4,8 @@ import { join } from 'node:path';
 export function createIntegracionBoletosService(config, fetchImpl = fetch) {
   return {
     async notify(job, detail) {
+      // FLUJO 18/18: enviar el resultado idempotente a backend-externo.
+      // CONTINUA FUERA DE ESTE PROYECTO: comprobante-integracion.controller.js.
       const payload = {
         notificacionId: job.id,
         eventoId: detail.eventoId,
@@ -12,6 +14,7 @@ export function createIntegracionBoletosService(config, fetchImpl = fetch) {
         estado: detail.estado,
         estadoFiscal: detail.estadoFiscal,
         estadoDocumentos: detail.estadoDocumentos,
+        respuestaSunat: detail.respuestaSunat ?? null,
         serie: detail.serie,
         numero: detail.numero,
         actualizadoEn: detail.actualizadoEn,
@@ -20,7 +23,7 @@ export function createIntegracionBoletosService(config, fetchImpl = fetch) {
           sha256,
           descarga: `/api/v1/integraciones/boletos/comprobantes/${detail.id}/documentos/${tipo}`,
         })),
-        simulado: true,
+        simulado: detail.simulado,
       };
       if (!config.callbackUrl) {
         await mkdir(config.callbackDirectory, { recursive: true });

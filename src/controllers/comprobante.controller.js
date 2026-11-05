@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { listSchema } from '../validators/compra.validator.js';
-import { createDemoPurchase } from '../utils/compra-prueba.js';
 
 const id = (req) => z.uuid().parse(req.params.id);
 export function createComprobanteController(service) {
   return {
     async receive(req, res) {
+      // FLUJO 02/18: adaptar HTTP y delegar el cuerpo sin reglas de negocio.
+      // CONTINUA EN FLUJO 03: comprobante.service.receive().
       res.status(202).json(await service.receive(req.body, 'BOLETOS'));
     },
     async list(req, res) {
@@ -30,28 +31,10 @@ export function createComprobanteController(service) {
       res.set('Cache-Control', 'no-store');
       res.set(
         'Content-Disposition',
-        `attachment; filename="prueba-${identifier}-${type.toLowerCase()}.${type === 'PDF' ? 'pdf' : 'xml'}"`,
+        `attachment; filename="comprobante-${identifier}-${type.toLowerCase()}.${type === 'PDF' ? 'pdf' : 'xml'}"`,
       );
       res.set('X-Content-SHA256', result.hash);
       res.type(type === 'PDF' ? 'application/pdf' : 'application/xml').send(result.content);
-    },
-    async demo(req, res) {
-      const input = z
-        .object({
-          modalidad: z.enum(['NORMAL', 'EXPRESS']),
-          tipoComprobante: z.enum(['BOLETA', 'FACTURA']),
-          cantidad: z.number().int().min(1).max(20),
-          escenarioPrueba: z.enum([
-            'EXITO',
-            'RECHAZO',
-            'ERROR_TEMPORAL',
-            'RESPUESTA_INCIERTA',
-            'DEMORADO',
-          ]),
-        })
-        .strict()
-        .parse(req.body);
-      res.status(202).json(await service.receive(createDemoPurchase(input), req.actor));
     },
   };
 }

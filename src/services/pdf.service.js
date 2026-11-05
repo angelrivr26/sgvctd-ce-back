@@ -1,13 +1,13 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { comprobantePruebaTemplate } from '../templates/comprobante-prueba.js';
+import { comprobanteTemplate } from '../templates/comprobante.js';
 
 const printable = (value) => String(value).replace(/[^\x20-\x7e\u00a0-\u00ff]/g, '?');
 
 /** Motor reemplazable. Genera bytes; no escribe archivos ni invoca al proveedor. */
-export function createPdfService(template = comprobantePruebaTemplate) {
+export function createPdfService(template = comprobanteTemplate) {
   return {
-    async render(record) {
-      const view = template(record);
+    async render(record, overrideTemplate = template) {
+      const view = overrideTemplate(record);
       const pdf = await PDFDocument.create();
       const normal = await pdf.embedFont(StandardFonts.Helvetica);
       const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -15,12 +15,12 @@ export function createPdfService(template = comprobantePruebaTemplate) {
       pdf.setCreationDate(date);
       pdf.setModificationDate(date);
       pdf.setTitle(`${view.title} ${view.reference}`);
-      pdf.setSubject(`Plantilla ${view.version}; sin validez tributaria`);
+      pdf.setSubject(`Plantilla ${view.version}`);
       let page, y;
       const newPage = () => {
         page = pdf.addPage([595.28, 841.89]);
         y = 785;
-        page.drawText('DOCUMENTO DE PRUEBA - SIN VALIDEZ TRIBUTARIA', {
+        page.drawText(view.title, {
           x: 40,
           y,
           size: 12,

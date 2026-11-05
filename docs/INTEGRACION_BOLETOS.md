@@ -1,89 +1,118 @@
-# Contrato de integracion con Boletos
+# Integracion con Boletos
 
-## Estado
+## Entrada a Comprobantes
 
-La API de Comprobantes esta implementada. La outbox emisora y la recepcion de resultados en los backend existentes de Boletos **todavia no se han incorporado**. No acceder directamente a su BD desde Comprobantes.
+Boletos envia una compra pagada a:
 
-## Recepcion
+```http
+POST /api/v1/integraciones/boletos/compras
+X-API-Key: <INTEGRATION_API_KEY>
+Content-Type: application/json
+```
 
-`POST /api/v1/integraciones/boletos/compras`, JSON y cabecera `X-API-Key` exclusiva del backend emisor. El esquema exacto esta en `openapi.json` y se genera desde el validador ejecutable.
-
-Ejemplo de datos exclusivamente ficticios:
+Ejemplo minimo:
 
 ```json
 {
-  "eventoId": "4cb6dd34-af42-4bc5-82c5-eab949e935f9",
+  "eventoId": "8eb68b62-ff48-4f84-a04a-bf23e904cb10",
   "origen": "BOLETOS",
-  "compraId": "PRUEBA-1001",
+  "compraId": "COMPRA-10001",
   "estadoPago": "PAGADO",
-  "modalidad": "EXPRESS",
-  "tipoComprobante": "FACTURA",
-  "fechaPago": "2026-10-30T12:00:00-05:00",
+  "modalidad": "NORMAL",
+  "tipoComprobante": "BOLETA",
+  "fechaPago": "2026-11-05T15:00:00-05:00",
   "moneda": "PEN",
   "emisor": {
     "ruc": "20000000001",
-    "razonSocial": "EMISOR FICTICIO PARA PRUEBAS",
-    "direccion": "Direccion de pruebas"
+    "razonSocial": "EMISOR DE PRUEBA",
+    "direccion": "Lima"
   },
   "comprador": {
-    "tipoDocumento": "RUC",
-    "numeroDocumento": "20000000002",
-    "nombre": "EMPRESA FICTICIA",
-    "direccion": "Direccion ficticia",
+    "tipoDocumento": "DNI",
+    "numeroDocumento": "00000001",
+    "nombre": "COMPRADOR DE PRUEBA",
     "correo": "pruebas@example.invalid"
   },
   "detalle": [
     {
-      "boletoIds": ["B-1", "B-2"],
-      "descripcion": "Ingresos de prueba",
-      "cantidad": 2,
+      "boletoIds": ["B-10001"],
+      "nombreAnp": "ANP DE PRUEBA",
+      "descripcion": "Ingreso",
+      "cantidad": 1,
       "precioUnitario": "30.00",
       "descuento": "0.00",
       "impuesto": "0.00",
-      "total": "60.00",
-      "afectacion": "POR_DEFINIR"
+      "total": "30.00",
+      "afectacion": "EXONERADO"
     }
   ],
-  "total": "60.00",
-  "escenarioPrueba": "EXITO"
+  "total": "30.00"
 }
 ```
 
-La agrupacion de lineas es opcional: cantidad corresponde al numero de boletos referidos en esa linea. Una linea por boleto tambien es valida. Un boleto no puede aparecer en dos lineas. Los importes de descuento e impuesto son totales de linea, no tasas.
+Para factura, el comprador debe usar RUC de 11 digitos e incluir direccion. Los importes son cadenas decimales con dos posiciones. `eventoId` y `compraId` deben ser estables en reintentos.
 
-`202` significa solicitud persistida, no comprobante emitido. La respuesta contiene `comprobante.id`, `estado` y `duplicado`. Conservar el mismo eventoId y payload en reintentos. Una compra repetida con datos diferentes devuelve `409`; errores de estructura o importes devuelven `422`. Ante `429`, respetar Retry-After; ante fallos de red/503, reintentar con espera creciente.
+La respuesta `202` significa que la compra fue persistida. `duplicado: true` indica un reintento idempotente con el mismo contenido. El mismo identificador con datos distintos devuelve `409`.
 
-Consultar resultado: `GET /api/v1/integraciones/boletos/comprobantes/{id}`. Descargar: `GET /api/v1/integraciones/boletos/comprobantes/{id}/documentos/{PDF|XML|CDR}`. Ambos requieren la misma autenticacion de integracion.
+## Consulta
 
-La descarga contiene `X-Content-SHA256`. Los enlaces son rutas del servicio Comprobantes: el backend consumidor debe resolverlas contra su base URL configurada y autenticarse. No entregar claves a un navegador ni construir URLs publicas a partir de rutas fisicas.
-
-## Resultado hacia Boletos
-
-Configurar URL y clave de callback en el backend de Comprobantes, no en el payload recibido. Se envia POST JSON, `X-API-Key` e `Idempotency-Key` igual a `notificacionId`.
-
-Campos: notificacionId, eventoId, compraId, comprobanteId, estado, estadoFiscal, estadoDocumentos, serie, numero, actualizadoEn, documentos y simulado. Las rutas de documentos estan protegidas.
-
-La consulta agrega estadoDocumentos, versionPlantilla y fechaEmision. Una emision simulada puede estar confirmada con documentos en ERROR; en ese caso no hay PDF ni correo disponible y se recuperan los mismos documentos. NO_HABILITADOS significa que falta confirmacion o hubo rechazo; DISPONIBLES indica que el conjunto fue persistido. No inferir aceptacion SUNAT de SIMULADO.
-
-El consumidor debe guardar el resultado antes de confirmar HTTP 2xx, deduplicar por notificacionId y evitar que un resultado viejo sobrescriba uno posterior. La notificacion de reintento conserva su identificador. Como respaldo, consultar el estado desde Boletos.
-
-## Outbox a incorporar en Boletos
-
-1. En la misma transaccion que confirma el pago, insertar evento unico con copia del payload.
-2. Registrar tanto compra normal como express y todos los medios efectivos de confirmacion del backend.
-3. Un job reclama pendientes, confirma su reserva y libera la conexion antes de llamar a Comprobantes.
-4. Guardar confirmacion de recepcion y comprobanteId al recibir 202. No marcar la factura como emitida.
-5. Reintentar sin regenerar eventoId. Si el 202 se perdio, repetir devuelve el mismo comprobante.
-6. Job de conciliacion para compras facturables sin evento y resultados pendientes.
-
-No activar retroactividad sobre compras historicas sin una fecha de corte y una regla de migracion acordadas. La gratuidad, cancelacion, devolucion o reprogramacion no debe inferirse como una nueva factura automaticamente.
-
-## Prueba sin modificar Boletos
-
-Con el backend iniciado, ejecutar desde su carpeta:
-
-```text
-node scripts/enviar-compra-prueba.js
+```http
+GET /api/v1/integraciones/boletos/comprobantes/{id}
+X-API-Key: <INTEGRATION_API_KEY>
 ```
 
-El script lee la clave del ambiente local y envia una factura express ficticia con tres boletos. Solo imprime identificadores y estado.
+No se debe considerar emitido hasta recibir `estado=PROCESADO`, `estadoFiscal=ACEPTADO`, `estadoDocumentos=DISPONIBLES` y `respuestaSunat.codigo=0`.
+
+## Callback a Boletos
+
+Al terminar o requerir atencion, Comprobantes envia a `BOLETOS_CALLBACK_URL`:
+
+```json
+{
+  "notificacionId": "uuid",
+  "eventoId": "uuid",
+  "compraId": "COMPRA-10001",
+  "comprobanteId": "uuid",
+  "estado": "PROCESADO",
+  "estadoFiscal": "ACEPTADO",
+  "estadoDocumentos": "DISPONIBLES",
+  "respuestaSunat": {
+    "ambiente": "beta",
+    "codigo": "0",
+    "descripcion": "La factura ha sido aceptada",
+    "fechaRespuesta": "2026-11-05T20:00:05.000Z"
+  },
+  "serie": "B001",
+  "numero": "123",
+  "actualizadoEn": "2026-11-05T20:00:06.000Z",
+  "documentos": [
+    {
+      "tipo": "PDF",
+      "sha256": "...",
+      "descarga": "/api/v1/integraciones/boletos/comprobantes/uuid/documentos/PDF"
+    }
+  ],
+  "simulado": false
+}
+```
+
+Cabeceras del callback:
+
+- `X-API-Key: BOLETOS_CALLBACK_KEY`
+- `Idempotency-Key: notificacionId`
+
+Boletos debe aceptar repeticiones de `notificacionId`, guardar `respuestaSunat` y no modificar el estado del pago por un fallo de documentos o callback. Si `respuestaSunat` es `null`, no existe evidencia persistida de respuesta SUNAT.
+
+## Descarga
+
+Cada ruta de `documentos[].descarga` requiere la misma clave de integracion. La respuesta incluye `X-Content-SHA256`; Boletos puede compararlo con el hash anunciado antes de conservar o mostrar el archivo.
+
+## Variables compartidas
+
+| Comprobantes           | Boletos                        | Regla                   |
+| ---------------------- | ------------------------------ | ----------------------- |
+| `INTEGRATION_API_KEY`  | clave de salida a Comprobantes | Deben coincidir         |
+| `BOLETOS_CALLBACK_URL` | endpoint receptor              | HTTPS fuera de loopback |
+| `BOLETOS_CALLBACK_KEY` | clave del receptor             | Deben coincidir         |
+
+No compartir credenciales SUNAT con Boletos. Solo este backend firma y comunica el comprobante.

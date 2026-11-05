@@ -8,8 +8,9 @@ export class AppError extends Error {
 }
 
 export class ProviderError extends Error {
-  constructor(message, { uncertain = false } = {}) {
+  constructor(message, { uncertain = false, retryable = true } = {}) {
     super(message);
     this.uncertain = uncertain;
+    this.retryable = retryable;
   }
 }

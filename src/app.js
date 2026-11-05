@@ -19,7 +19,7 @@ export function createApp({ services, database, config }) {
     cors({
       origin: config.appOrigin,
       credentials: true,
-      methods: ['GET', 'POST', 'DELETE'],
+      methods: ['GET', 'POST'],
       allowedHeaders: ['Content-Type', 'X-API-Key'],
     }),
   );
@@ -49,13 +49,17 @@ export function createApp({ services, database, config }) {
   const controller = createComprobanteController(services.comprobantes);
   app.get('/api/health', async (_req, res) => {
     await database.query('SELECT 1 AS ok');
-    res.json({ estado: 'DISPONIBLE', modo: 'PRUEBAS', proveedor: 'SIMULADO', version: '0.1.0' });
+    res.json({
+      estado: 'DISPONIBLE',
+      ambiente: config.environment,
+      proveedor: `SUNAT_${config.sunat.environment.toUpperCase()}`,
+      version: '0.1.0',
+    });
   });
   app.get('/api/openapi.json', (_req, res) => res.json(openApiDocument));
   app.use('/api/v1/auth', createAuthRouter(createAuthController(services.auth, config), auth));
   app.use('/api/v1/comprobantes', createComprobanteRouter(controller, auth));
   app.use('/api/v1/integraciones/boletos', createIntegrationRouter(controller, auth));
-  app.post('/api/v1/pruebas/compras', auth.session, controller.demo);
   app.use((_req, res) =>
     res
       .status(404)

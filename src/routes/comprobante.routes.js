@@ -15,6 +15,8 @@ export function createComprobanteRouter(controller, middleware) {
 export function createIntegrationRouter(controller, middleware) {
   const router = Router();
   router.use(middleware.integration);
+  // FLUJO 01/18: entra la compra de backend-externo.
+  // CONTINUA EN FLUJO 02: comprobante.controller.receive().
   router.post('/compras', controller.receive);
   router.get('/comprobantes/:id', controller.detail);
   router.get('/comprobantes/:id/documentos/:tipo', controller.download);
