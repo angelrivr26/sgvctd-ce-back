@@ -5,10 +5,13 @@ const id = (req) => z.uuid().parse(req.params.id);
 export function createComprobanteController(service) {
   return {
     async receive(req, res) {
-      // FLUJO 02/18: adaptar HTTP y delegar el cuerpo sin reglas de negocio.
-      // CONTINUA EN FLUJO 03: comprobante.service.receive().
+      // FLUJO 02/18.
+      // LLAMADO POR: routes/comprobante.routes.js -> POST /compras.
+      // HACE: pasa el JSON al servicio y responde 202. El 202 significa recibido, no aceptado por SUNAT.
+      // CONTINUA EN: services/comprobante.service.js -> receive() (FLUJO 03).
       res.status(202).json(await service.receive(req.body, 'BOLETOS'));
     },
+    // FUERA DEL FLUJO SUNAT. Los usa el panel y la consulta de Boletos; no emiten.
     async list(req, res) {
       res.json(await service.list(listSchema.parse(req.query)));
     },

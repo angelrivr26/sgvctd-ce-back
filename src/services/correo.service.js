@@ -5,7 +5,10 @@ import { join } from 'node:path';
 export function createCorreoService(directory) {
   return {
     async send(job, detail) {
-      // FLUJO 18/18: capturar correo local. Produccion debe sustituir este adaptador por SMTP.
+      // FLUJO 18/18, correo.
+      // LLAMADO POR: entrega.service.js -> process(), cuando el trabajo es tipo CORREO.
+      // HACE: escribe un JSON local. No abre SMTP ni escribe al comprador.
+      // CONTINUA EN: entrega.model.js -> complete(), con estado CAPTURADO_PRUEBA.
       await mkdir(directory, { recursive: true });
       const path = join(directory, `${job.id}.json`);
       const content = {

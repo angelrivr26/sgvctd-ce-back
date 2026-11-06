@@ -6,7 +6,7 @@ El backend tiene un unico camino de emision SUNAT. Beta y produccion comparten v
 
 ## Orden exacto del proceso
 
-Los mismos numeros aparecen como comentarios `FLUJO NN/18` en los metodos. Buscar `FLUJO 01`, `FLUJO 02`, etc. permite recorrer el codigo sin conocer previamente el proyecto.
+Los mismos numeros aparecen como comentarios `FLUJO NN/18` en los metodos. Cada uno indica `LLAMADO POR`, `HACE` y `CONTINUA EN`. El mapa completo esta al inicio de `src/services/application.service.js`.
 
 | Paso | Metodo                                                             | Responsabilidad y continuacion                             |
 | ---: | ------------------------------------------------------------------ | ---------------------------------------------------------- |

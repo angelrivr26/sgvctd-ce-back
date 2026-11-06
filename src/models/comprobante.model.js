@@ -34,8 +34,10 @@ export function createComprobanteModel(database) {
   return {
     get,
     async receive(payload, actor = 'BOLETOS') {
-      // FLUJO 04/18: guardar una sola vez por eventoId y compraId.
-      // TERMINA RECEPCION: controller devuelve HTTP 202; el worker retoma en FLUJO 05.
+      // FLUJO 04/18. Fin de la recepcion HTTP.
+      // LLAMADO POR: services/comprobante.service.js -> receive().
+      // HACE: inserta la compra. Si eventoId o compraId ya existen con el mismo contenido, devuelve la fila anterior.
+      // CONTINUA EN: el controller responde 202. El worker retoma despues en claim() (FLUJO 05).
       const { eventoId, ...businessData } = payload;
       const hash = digest(canonicalJson(businessData));
       return database.transaction(async (tx) => {
@@ -124,8 +126,10 @@ export function createComprobanteModel(database) {
       return { record, documents, deliveries, history };
     },
     async claim(limit, leaseSeconds) {
-      // FLUJO 05/18: reservar compras pendientes sin que dos workers tomen la misma.
-      // CONTINUA EN FLUJO 06: procesamiento.service.process().
+      // FLUJO 05/18.
+      // LLAMADO POR: workers/procesamiento.worker.js -> emit().
+      // HACE: toma compras PENDIENTES, o PROCESANDO con reserva vencida, y les pone un token temporal.
+      // CONTINUA EN: services/procesamiento.service.js -> process() (FLUJO 06).
       const token = randomUUID();
       return database.transaction((tx) =>
         tx.query(
@@ -142,8 +146,10 @@ export function createComprobanteModel(database) {
       );
     },
     async saveEmission(record, result) {
-      // FLUJO 12/18 (ACEPTADO): persistir CDR 0 antes de generar archivos.
-      // CONTINUA EN FLUJO 13: startDocuments().
+      // FLUJO 12/18, rama aceptada.
+      // LLAMADO POR: services/procesamiento.service.js -> confirmEmission().
+      // HACE: guarda serie, numero y CDR aceptada. Todavia no crea PDF.
+      // CONTINUA EN: startDocuments() (FLUJO 13), llamado por generateDocuments().
       const confirmed = validateEmissionResult(result, record.id);
       return database.transaction(async (tx) => {
         const updated = await tx.query(
@@ -172,8 +178,10 @@ export function createComprobanteModel(database) {
       });
     },
     async saveRejection(record, result) {
-      // FLUJO 12/18 (RECHAZADO): cerrar la emision y crear callback a Boletos.
-      // SALTA A FLUJO 16: no genera PDF ni correo.
+      // FLUJO 12/18, rama rechazada.
+      // LLAMADO POR: services/procesamiento.service.js -> confirmEmission().
+      // HACE: cierra el comprobante en REQUIERE_ATENCION y crea solo la entrega BOLETOS.
+      // CONTINUA EN: salta el PDF y el correo. El worker de entregas lo toma en FLUJO 16.
       const rejected = validateEmissionResult(result, record.id, 'RECHAZADO');
       return database.transaction(async (tx) => {
         const saved = await tx.query(
@@ -207,7 +215,10 @@ export function createComprobanteModel(database) {
       });
     },
     async defer(record) {
-      // ESPERA CONTROLADA: libera la reserva sin consumir un intento.
+      // ESPERA, no es un paso nuevo.
+      // LLAMADO POR: procesamiento.service.js -> confirmEmission(), cuando SUNAT esta ocupada.
+      // HACE: suelta la reserva y devuelve un intento. No llama a SUNAT.
+      // CONTINUA EN: el siguiente ciclo del worker vuelve a claim() (FLUJO 05).
       await database.query(
         `UPDATE comprobantes SET estado='PENDIENTE',intentos=GREATEST(0,intentos-1),
          proximo_intento=now()+interval '5 seconds',reserva_hasta=NULL,reserva_token=NULL
@@ -216,8 +227,10 @@ export function createComprobanteModel(database) {
       );
     },
     async startDocuments(record) {
-      // FLUJO 13/18: obtener permiso exclusivo para generar documentos.
-      // CONTINUA EN FLUJO 14: documentos.service.generate().
+      // FLUJO 13/18.
+      // LLAMADO POR: services/procesamiento.service.js -> generateDocuments().
+      // HACE: marca GENERANDO solo si la emision ya quedo COMPLETADO y el token sigue vigente.
+      // CONTINUA EN: services/documentos.service.js -> generate() (FLUJO 14).
       const rows = await database.query(
         `UPDATE comprobantes SET estado_documentos='GENERANDO',actualizado_en=now()
          WHERE id=$1 AND reserva_token=$2 AND estado='PROCESANDO'
@@ -227,8 +240,10 @@ export function createComprobanteModel(database) {
       return rows[0] ?? null;
     },
     async complete(record, documents, templateVersion) {
-      // FLUJO 15/18: registrar PDF/XML/CDR y crear trabajos de entrega.
-      // CONTINUA EN FLUJO 16: procesamiento.worker.deliver().
+      // FLUJO 15/18.
+      // LLAMADO POR: services/procesamiento.service.js -> generateDocuments().
+      // HACE: deja el comprobante PROCESADO y crea dos entregas: BOLETOS y CORREO.
+      // CONTINUA EN: workers/procesamiento.worker.js -> deliver() (FLUJO 16).
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE comprobantes SET estado='PROCESADO',estado_documentos='DISPONIBLES',
@@ -268,7 +283,10 @@ export function createComprobanteModel(database) {
       });
     },
     async fail(record, { message, retry, uncertain = false, fiscalState, delaySeconds = 5 }) {
-      // RUTA DE ERROR: conserva el avance y decide reintento o atencion manual.
+      // RUTA DE ERROR. No borra una emision ya confirmada.
+      // LLAMADO POR: procesamiento.service.js -> process() o confirmEmission().
+      // HACE: programa otro intento o pasa a REQUIERE_ATENCION. Si ya no hay reintento, avisa a Boletos.
+      // CONTINUA EN: un reintento vuelve a FLUJO 05. Sin reintento, la entrega sigue en FLUJO 16.
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE comprobantes SET estado=$3,
@@ -297,6 +315,8 @@ export function createComprobanteModel(database) {
         if (!retry) await delivery(tx, record.id, 'BOLETOS');
       });
     },
+    // FUERA DEL FLUJO AUTOMATICO. Lo llama el panel: POST /comprobantes/:id/reintentar.
+    // Vuelve a PENDIENTE para que el worker entre otra vez por FLUJO 05. No reenvia un rechazo SUNAT.
     async retry(id, actor) {
       return database.transaction(async (tx) => {
         const updated = await tx.query(

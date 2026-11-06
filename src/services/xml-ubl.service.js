@@ -18,8 +18,11 @@ const subtotal = (line, withReason = false) =>
 
 /** Genera la misma UBL para beta o produccion; ambiente, series y local provienen de .env. */
 export function createSunatRequest(input, config, { numero, now = new Date() }) {
-  // FLUJO 08/18: transformar la compra validada en UBL; no usa red ni base de datos.
-  // CONTINUA EN FLUJO 08: firma-xml.service.signUblXml().
+  // FLUJO 08/18, construccion del XML.
+  // LLAMADO POR: sunat.service.js -> prepareRequest().
+  // HACE: valida impuestos y arma Invoice UBL 2.1. No usa red ni base de datos.
+  // CONTINUA EN: firma-xml.service.js -> signUblXml().
+  // DENTRO: 1 compra y numero, 2 lineas e impuesto, 3 serie y fecha Lima, 4 XML de cabecera y detalle.
   const payload = compraSchema.parse(input);
   if (config.environment === 'beta' && payload.emisor.ruc !== '20000000001')
     reject('SUNAT beta requiere el emisor ficticio 20000000001.');

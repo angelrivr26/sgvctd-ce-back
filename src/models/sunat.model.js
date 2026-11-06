@@ -9,7 +9,10 @@ export function createSunatModel(database) {
       );
     },
     async prepare(id, request) {
-      // FLUJO 08/18: diario durable de la UBL firmada; aun no se uso la red.
+      // FLUJO 08/18, persistencia.
+      // LLAMADO POR: sunat.service.js -> prepareRequest(), despues de signUblXml().
+      // HACE: inserta la UBL firmada en sunat_envios con estado PREPARADO. No abre red.
+      // CONTINUA EN: sunat.service.js -> sendPreparedRequest().
       await database.query(
         `INSERT INTO sunat_envios(comprobante_id,ambiente,serie,numero,solicitud)
          VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(comprobante_id) DO NOTHING RETURNING comprobante_id`,
@@ -18,7 +21,10 @@ export function createSunatModel(database) {
       return get(id);
     },
     async beginSend(id, zip, timeoutMs) {
-      // FLUJO 09/18: marcar ENVIO_INICIADO justo antes del POST a SUNAT.
+      // FLUJO 09/18, compuerta.
+      // LLAMADO POR: sunat.service.js -> transport.send(), callback onPrepared, antes del POST.
+      // HACE: deja pasar un solo envio a la vez y cambia la fila a ENVIO_INICIADO.
+      // CONTINUA EN: el mismo transport.send() hace el POST. Si devuelve false, no hay red.
       return database.transaction(async (tx) => {
         const gate = await tx.query(
           `UPDATE sunat_control SET operacion_id=$1,
@@ -41,7 +47,10 @@ export function createSunatModel(database) {
       });
     },
     async saveResponse(id, { text, httpStatus }, date) {
-      // FLUJO 10/18: guardar SOAP antes de que el proveedor lo interprete.
+      // FLUJO 10/18, diario crudo.
+      // LLAMADO POR: sunat.service.js -> transport.send(), callback onResponse.
+      // HACE: guarda el SOAP tal como llego y libera la compuerta. Todavia no decide aceptado o rechazado.
+      // CONTINUA EN: parseSunatResponse() dentro del mismo send().
       await database.transaction(async (tx) => {
         const saved = await tx.query(
           `UPDATE sunat_envios SET estado='RESPONDIDO',respuesta_soap=$2,
@@ -58,7 +67,10 @@ export function createSunatModel(database) {
       });
     },
     async saveTransportError(id, code) {
-      // RESULTADO INCIERTO: conserva el error y prohibe un reenvio automatico.
+      // RESULTADO INCIERTO. No es un reintento.
+      // LLAMADO POR: sunat.service.js -> sendPreparedRequest(), si el POST ya empezo y fallo la lectura.
+      // HACE: anota el error de transporte y deja la fila en ENVIO_INICIADO.
+      // CONTINUA EN: consultarResultado(), que se niega a reenviar esa operacion.
       await database.query(
         `UPDATE sunat_envios SET error_transporte=$2
          WHERE comprobante_id=$1 AND estado='ENVIO_INICIADO' RETURNING comprobante_id`,

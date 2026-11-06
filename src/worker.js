@@ -12,7 +12,8 @@ const database = await createDatabase(config);
 // WORKER SEPARADO: verificar en solo lectura el esquema preparado por el DBA.
 await verifyDatabaseSchema(database);
 const services = createApplicationServices(database, config);
-// Retoma el flujo principal en FLUJO 05 y FLUJO 16.
+// Proceso aparte, sin HTTP. Retoma el mismo mapa en FLUJO 05 (emitir) y FLUJO 16 (entregar).
+// LLAMADO POR: npm run worker. El arranque normal usa src/index.js y no entra por este archivo.
 services.worker.start();
 console.log(`Worker Comprobantes iniciado: SUNAT ${config.sunat.environment}, PostgreSQL.`);
 let stopping = false;

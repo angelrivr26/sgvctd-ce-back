@@ -4,8 +4,10 @@ import { join } from 'node:path';
 export function createIntegracionBoletosService(config, fetchImpl = fetch) {
   return {
     async notify(job, detail) {
-      // FLUJO 18/18: enviar el resultado idempotente a backend-externo.
-      // CONTINUA FUERA DE ESTE PROYECTO: comprobante-integracion.controller.js.
+      // FLUJO 18/18, aviso a Boletos.
+      // LLAMADO POR: entrega.service.js -> process(), cuando el trabajo es tipo BOLETOS.
+      // HACE: arma el JSON del resultado y lo envia al callback. Sin URL, lo guarda en disco.
+      // CONTINUA EN: backend-externo, controllers/comprobante-integracion.controller.js.
       const payload = {
         notificacionId: job.id,
         eventoId: detail.eventoId,

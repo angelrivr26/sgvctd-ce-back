@@ -29,8 +29,10 @@ async function readResponse(response) {
 }
 
 export function parseSunatResponse(text, httpStatus, expectedReference, expectedFileName) {
-  // FLUJO 10/18: convertir SOAP/CDR en ACEPTADO, RECHAZADO o ERROR_SOAP.
-  // CONTINUA EN FLUJO 11: procesamiento.service confirma la decision.
+  // FLUJO 10/18. No llama a SUNAT; solo lee un SOAP que ya esta en memoria o en el diario.
+  // LLAMADO POR: createSunatTransport().send() y por consultarResultado() si la respuesta ya estaba guardada.
+  // HACE: distingue Fault, rechazo y CDR con codigo 0. Exige que el XML corresponda al comprobante enviado.
+  // CONTINUA EN: consultarResultado() arma el resultado y procesamiento.service.js decide en FLUJO 11.
   const document = parseXml(text, maxResponse);
   if (
     document.documentElement.localName !== 'Envelope' ||
@@ -129,8 +131,10 @@ export function createSunatTransport({
       return { estado: 'WSDL_DISPONIBLE', ambiente: config.environment, endpoint: config.endpoint };
     },
     async send(request) {
-      // FLUJO 09/18: persistir inicio, enviar una vez y persistir respuesta cruda.
-      // CONTINUA EN FLUJO 10: parseSunatResponse().
+      // FLUJO 09/18. Unica llamada de red sendBill de este proyecto.
+      // LLAMADO POR: createSunatProvider() -> sendPreparedRequest().
+      // HACE: comprime el XML, arma el SOAP, marca el envio, espera la respuesta y la guarda cruda.
+      // CONTINUA EN: parseSunatResponse() (FLUJO 10). onPrepared corre antes del POST; onResponse, justo despues.
       if (
         !/^\d{11}-(01|03)-[A-Z0-9]{4}-[1-9]\d{0,7}$/.test(request.nombreArchivo) ||
         !request.nombreArchivo.endsWith(`-${request.referencia}`)
@@ -157,7 +161,13 @@ export function createSunatTransport({
   };
 }
 
-/** Proveedor fiscal unico. Consulta el diario antes de cada posible sendBill. */
+/**
+ * Proveedor SUNAT. Orden interno, siempre de arriba hacia abajo:
+ * solicitarEmision()        <- procesamiento.service.js -> confirmEmission()
+ *   consultarResultado()    si ya hay SOAP guardado, no vuelve a la red
+ *   prepareRequest()        UBL, firma y diario local
+ *   sendPreparedRequest()   transport.send()
+ */
 export function createSunatProvider(
   database,
   config,
@@ -166,8 +176,10 @@ export function createSunatProvider(
   const model = createSunatModel(database);
 
   async function consultarResultado(id) {
-    // FLUJO 07/18: leer el diario SUNAT antes de considerar un nuevo envio.
-    // SIN RESPUESTA -> FLUJO 08. RESPUESTA GUARDADA -> FLUJO 10.
+    // FLUJO 07/18.
+    // LLAMADO POR: confirmEmission(), solicitarEmision() y sendPreparedRequest() despues del POST.
+    // HACE: lee sunat_envios. Sin fila o en PREPARADO devuelve null. Con SOAP guardado lo interpreta.
+    // CONTINUA EN: null sigue a prepareRequest() (FLUJO 08). SOAP guardado salta a FLUJO 10 sin red.
     const row = await model.get(id);
     if (!row || row.estado === 'PREPARADO') return null;
     if (row.estado === 'ENVIO_INICIADO')
@@ -215,6 +227,10 @@ export function createSunatProvider(
   }
 
   async function prepareRequest(payload, id) {
+    // FLUJO 08/18, preparacion local.
+    // LLAMADO POR: solicitarEmision(), solo cuando consultarResultado() devolvio null.
+    // HACE: si el diario ya tiene la fila, la reutiliza. Si no, numera, crea UBL, firma y guarda.
+    // CONTINUA EN: sendPreparedRequest(). La red empieza recien ahi.
     let row = await model.get(id);
     if (row) return row;
 
@@ -227,6 +243,10 @@ export function createSunatProvider(
   }
 
   async function sendPreparedRequest(row, id) {
+    // FLUJO 09/18, orquestacion del POST.
+    // LLAMADO POR: solicitarEmision().
+    // HACE: conecta el transporte con el diario. Si otro proceso ya envia, espera. Si el POST falla despues de iniciar, no lo repite.
+    // CONTINUA EN: transport.send() y, al terminar, otra vez consultarResultado().
     const sunat = createSunatTransport({
       config,
       fetchImpl,
@@ -256,6 +276,10 @@ export function createSunatProvider(
 
   return {
     consultarResultado,
+    // FLUJO 07 a 09, entrada publica del proveedor.
+    // LLAMADO POR: services/procesamiento.service.js -> confirmEmission().
+    // HACE: relee el diario, prepara solo si falta la solicitud y envia una sola vez.
+    // CONTINUA EN: consultarResultado(), prepareRequest() y sendPreparedRequest().
     async solicitarEmision(payload, id) {
       const previous = await consultarResultado(id);
       if (previous) return previous;

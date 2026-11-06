@@ -1,5 +1,10 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-05 - Comentarios de recorrido para lectura de LT
+
+- Cada metodo del flujo 01 a 18 indica quien lo llama, que hace y en que archivo continua. El mapa vive en `application.service.js`.
+- Cambio solo de comentarios. No se modifica validacion, UBL, firma, SOAP, lectura de CDR, persistencia ni callback.
+
 ## 2026-11-05 - Esquema administrado exclusivamente por DBA
 
 - Se eliminan el ejecutor automatico `database/migrate.js`, los comandos `db:migrate` y `db:configurar-boletos`, y sus scripts. API y worker ya no crean esquemas, tablas ni historial de migraciones.
@@ -195,3 +200,24 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 
 - Proveedor, XML y CDR simulados; no se incorporan certificados, firma, QR fiscal ni envios reales. Plantilla JavaScript sobre pdf-lib; el motor puede sustituirse por HTML/CSS mediante su contrato.
 - Sigue pendiente el dimensionamiento productivo con PostgreSQL, reglas contables y modalidad SUNAT/PSE.
+# Cambio: exclusión de archivos locales de Git
+
+- **Alcance:** se declaran `.local/` y `.tools/` como directorios locales ignorados por Git.
+- **Motivo:** evitar subir datos, documentos, certificados y herramientas locales del entorno de desarrollo.
+- **Validación:** se revisó que las reglas de `.gitignore` incluyan ambos directorios.
+- **Limitaciones:** Git no deja de seguir archivos que ya estaban versionados; esos requieren retirarse del índice por separado. No se borró ningún archivo local.
+
+# Cambio: endpoints SUNAT configurables
+
+- **Alcance:** `src/config/sunat.js` lee las URL de Beta y Producción desde `SUNAT_BETA_URL` y `SUNAT_PRODUCTION_URL`; se documentan en `.env.example`.
+- **Motivo:** permitir cambiar endpoints por ambiente sin editar código y mantener la misma lógica de envío.
+- **Validación:** cambio limitado a la fuente de configuración de los endpoints; no se ejecutaron pruebas en esta sesión.
+- **Limitaciones:** las variables deben existir en el `.env` local o en el entorno de ejecución. No se reorganizaron servicios SUNAT porque no se pudo inspeccionar sus imports.
+
+# Corrección: variables duplicadas en configuración local
+
+- **Alcance:** se elimina una segunda declaración local de las URL SUNAT en `.env`.
+- **Motivo:** evitar ambigüedad al cargar configuración de desarrollo.
+- **Validación:** se verificó contra el contenido compartido por el usuario; se conserva una declaración de cada URL.
+- **Limitaciones:** no se pudo ejecutar `npm run dev` ni revisar `src/database/schema.js` porque la terminal no está disponible en esta sesión.
+

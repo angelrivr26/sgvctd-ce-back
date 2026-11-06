@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
 const endpoints = Object.freeze({
-  beta: 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
-  production: 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
+  beta: process.env.SUNAT_BETA_URL,
+  production: process.env.SUNAT_PRODUCTION_URL,
 });
 
 function integer(value, name, min, max) {

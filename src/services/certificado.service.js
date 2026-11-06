@@ -6,6 +6,10 @@ import { X509Certificate } from 'node:crypto';
 
 /** Lee el certificado institucional o crea uno local exclusivamente para SUNAT beta. */
 export async function loadSunatCertificate(config) {
+  // FLUJO 08/18, apoyo de la firma.
+  // LLAMADO POR: sunat.service.js -> prepareRequest(), mediante credentials().
+  // HACE: lee la clave y el certificado. En beta puede crear un par local si no existe.
+  // CONTINUA EN: firma-xml.service.js -> signUblXml().
   let privateKeyPath = config.privateKeyPath;
   let certificatePath = config.certificatePath;
 

@@ -11,13 +11,18 @@ export function createWorker({
   const active = new Set();
   let stopped = true;
   async function emit() {
-    // FLUJO 05/18: reservar y procesar compras pendientes.
+    // FLUJO 05/18, lado del worker.
+    // LLAMADO POR: start() al arrancar, y luego el mismo loop cada workerIntervalMs.
+    // HACE: pide compras reservadas y procesa cada una. Un ciclo no pisa al anterior.
+    // CONTINUA EN: models/comprobante.model.js -> claim() y procesamiento.service.js -> process().
     const purchases = await comprobanteModel.claim(config.workerConcurrency, config.leaseSeconds);
     await Promise.all(purchases.map((record) => procesamiento.process(record)));
   }
   async function deliver() {
-    // FLUJO 16/18: reservar entregas creadas al aceptar o rechazar una emision.
-    // CONTINUA EN FLUJO 17: entrega.service.process().
+    // FLUJO 16/18, lado del worker.
+    // LLAMADO POR: start(), en paralelo con emit(). No espera a que termine la emision del mismo ciclo.
+    // HACE: reserva entregas ya creadas por complete() o saveRejection().
+    // CONTINUA EN: models/entrega.model.js -> claim() y entrega.service.js -> process() (FLUJO 17).
     const notifications = await entregaModel.claim(config.workerConcurrency, config.leaseSeconds);
     await Promise.all(notifications.map((job) => entregas.process(job)));
   }

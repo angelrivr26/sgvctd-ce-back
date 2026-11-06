@@ -13,19 +13,34 @@ import { createEntregaService } from './entrega.service.js';
 import { createWorker } from '../workers/procesamiento.worker.js';
 
 /**
- * MAPA DEL FLUJO PRINCIPAL (buscar "FLUJO NN" para seguirlo en el codigo)
- * 01 route POST                -> 02 controller.receive
- * 02 controller.receive       -> 03 comprobanteService.receive
- * 03 validar compra           -> 04 comprobanteModel.receive -> HTTP 202
- * 05 worker reserva compra    -> 06 procesamiento.process
- * 07 consultar diario SUNAT   -> 08 preparar UBL, firma y solicitud
- * 09 enviar SOAP              -> 10 persistir/interpretar respuesta
- * 11 decidir resultado        -> 12 guardar aceptacion o rechazo
- * 13 habilitar documentos     -> 14 generar PDF/XML/CDR
- * 15 cerrar comprobante       -> 16 worker reserva entregas
- * 17 decidir destino          -> 18 callback a Boletos o captura de correo
+ * MAPA DEL FLUJO PRINCIPAL. Buscar "FLUJO NN" en el codigo.
  *
- * Este es el unico lugar de composicion: ningun servicio crea conexiones ocultas.
+ * Recepcion (termina con HTTP 202; SUNAT todavia no fue llamada)
+ * 01 routes POST /compras          lo llama backend-externo
+ * 02 controller.receive            lo llama la ruta
+ * 03 comprobante.service.receive   valida el JSON
+ * 04 comprobante.model.receive     guarda una sola vez y deja la fila PENDIENTE
+ *
+ * Emision (la retoma el worker, no el HTTP)
+ * 05 worker.emit + model.claim     reserva la compra
+ * 06 procesamiento.process         orquesta esa fila
+ * 07 sunat.consultarResultado      lee el diario antes de usar la red
+ * 08 UBL + firma + model.prepare   deja la solicitud guardada
+ * 09 transport.send                un solo POST sendBill
+ * 10 parseSunatResponse            convierte SOAP/CDR en aceptado o rechazado
+ * 11 confirmEmission               decide el destino de esa respuesta
+ * 12 model.saveEmission o saveRejection
+ *
+ * Documentos y aviso (solo si SUNAT acepto)
+ * 13 model.startDocuments
+ * 14 documentos.generate           PDF local; XML y CDR salen de SUNAT
+ * 15 model.complete                crea los trabajos de entrega
+ * 16 worker.deliver + entrega.claim
+ * 17 entrega.process               elige correo o callback
+ * 18 correo.send o integracion.notify
+ *    El rechazo salta de 12 a 16 y solo avisa a Boletos.
+ *
+ * Este archivo solo conecta piezas. Ningun servicio abre su propia conexion.
  */
 export function createApplicationServices(database, config, { provider, sunat = {} } = {}) {
   const model = createComprobanteModel(database);

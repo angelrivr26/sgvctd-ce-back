@@ -31,8 +31,10 @@ export function presentComprobante(record) {
 export function createComprobanteService(model, archivo) {
   return {
     async receive(input, actor) {
-      // FLUJO 03/18: validar la compra antes de tocar la base.
-      // CONTINUA EN FLUJO 04: comprobante.model.receive().
+      // FLUJO 03/18.
+      // LLAMADO POR: controllers/comprobante.controller.js -> receive().
+      // HACE: valida el contrato de la compra. Si el JSON es invalido, no se guarda nada.
+      // CONTINUA EN: models/comprobante.model.js -> receive() (FLUJO 04).
       const payload = compraSchema.parse(input);
       const { record, duplicate } = await model.receive(payload, actor);
       return { comprobante: presentComprobante(record), duplicado: duplicate };

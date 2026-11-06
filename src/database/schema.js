@@ -55,6 +55,6 @@ export async function verifyDatabaseSchema(database) {
   if (!sequences.length) missing.push('sunat_numero_seq');
   if (missing.length)
     throw new Error(
-      `Esquema ${database.schema} incompleto. El DBA debe ejecutar sql/001_esquema.sql. Faltan: ${missing.join(', ')}.`,
+      `Esquema ${database.schema} incompleto. Ejecutar sql/001_esquema.sql. Faltan: ${missing.join(', ')}.`,
     );
 }

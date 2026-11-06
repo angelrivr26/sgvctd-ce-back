@@ -5,7 +5,10 @@ const retryDelay = (attempt) =>
 
 export function createProcesamientoService({ model, provider, documentos, config }) {
   async function confirmEmission(record) {
-    // FLUJO 07/18: consultar primero el diario; nunca reenviar a ciegas.
+    // FLUJO 07 y FLUJO 11. Funcion interna; no la llama HTTP.
+    // LLAMADO POR: process(), solo si la fila todavia no tiene resultado_emision.
+    // HACE: pregunta el diario SUNAT. Si no hay respuesta, pide la emision. Despues elige rechazo o aceptacion.
+    // CONTINUA EN: sunat.service.js -> consultarResultado() y, si falta, solicitarEmision().
     const previous = await provider.consultarResultado(record.id);
     const result =
       previous ?? (await provider.solicitarEmision(record.payload, record.id, record.intentos));
@@ -21,7 +24,9 @@ export function createProcesamientoService({ model, provider, documentos, config
       return null;
     }
 
-    // FLUJO 11/18: decidir una sola vez entre rechazo y aceptacion.
+    // FLUJO 11/18, decision unica.
+    // RECHAZADO continua en model.saveRejection(). El aviso a Boletos lo toma despues el worker en FLUJO 16.
+    // COMPLETADO continua en model.saveEmission() y luego generateDocuments().
     if (result.estado === 'RECHAZADO') {
       await model.saveRejection(record, result);
       return null;
@@ -32,17 +37,22 @@ export function createProcesamientoService({ model, provider, documentos, config
   }
 
   async function generateDocuments(record) {
+    // FLUJO 13 y FLUJO 14. Solo corre despues de una aceptacion guardada.
+    // LLAMADO POR: process(), tambien en un reintento si la emision ya estaba confirmada.
+    // HACE: reserva la generacion, crea los archivos y cierra el comprobante.
+    // CONTINUA EN: model.startDocuments(), documentos.generate() y model.complete().
     const generating = await model.startDocuments(record);
     if (!generating) return;
-    // FLUJO 14/18: generar y guardar PDF/XML/CDR.
     const generated = await documentos.generate(generating);
     await model.complete(generating, generated.documents, generated.templateVersion);
   }
 
   return {
     async process(record) {
-      // FLUJO 06/18: orquestar emision y documentos de una compra reservada.
-      // CONTINUA EN FLUJO 07: confirmEmission().
+      // FLUJO 06/18. Punto de entrada de una compra ya reservada.
+      // LLAMADO POR: workers/procesamiento.worker.js -> emit().
+      // HACE: si falta la respuesta SUNAT, la confirma; si ya existe, solo recupera los documentos.
+      // CONTINUA EN: confirmEmission() (FLUJO 07). Si devuelve null, esta funcion termina.
       let confirmed = record.resultado_emision != null;
       try {
         if (!confirmed) {

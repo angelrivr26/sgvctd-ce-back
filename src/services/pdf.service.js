@@ -5,6 +5,10 @@ const printable = (value) => String(value).replace(/[^\x20-\x7e\u00a0-\u00ff]/g,
 
 /** Motor reemplazable. Genera bytes; no escribe archivos ni invoca al proveedor. */
 export function createPdfService(template = comprobanteTemplate) {
+  // FLUJO 14/18, pieza interna.
+  // LLAMADO POR: documentos.service.js -> generate().
+  // HACE: dibuja el PDF a partir del resultado ya aceptado.
+  // CONTINUA EN: documentos.service.js guarda el archivo y vuelve a model.complete().
   return {
     async render(record, overrideTemplate = template) {
       const view = overrideTemplate(record);

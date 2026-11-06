@@ -4,6 +4,9 @@ import { verifyDatabaseSchema } from './database/schema.js';
 import { createApplicationServices } from './services/application.service.js';
 import { createApp } from './app.js';
 
+// ARRANQUE. No emite comprobantes.
+// CONTINUA EN: services/application.service.js (mapa FLUJO 01 a 18).
+// El worker arranca al final, en server.once('listening'), y retoma en FLUJO 05.
 // ARRANQUE A: leer configuracion. No abre red ni modifica la base.
 const config = loadConfig();
 // ARRANQUE B: conectar y verificar en solo lectura el esquema creado por el DBA.

@@ -6,7 +6,10 @@ const c14n = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
 
 /** Firma local; la clave privada nunca se incorpora al XML ni sale del proceso. */
 export function signUblXml(xml, { privateKey, certificate }) {
-  // FLUJO 08/18: firmar localmente. CONTINUA EN sunat.model.prepare().
+  // FLUJO 08/18, firma local.
+  // LLAMADO POR: sunat.service.js -> prepareRequest(), despues de createSunatRequest().
+  // HACE: firma el Invoice y comprueba la firma antes de devolverla.
+  // CONTINUA EN: models/sunat.model.js -> prepare().
   const document = parseXml(xml);
   if (
     document.documentElement.localName !== 'Invoice' ||

@@ -7,3 +7,6 @@ coverage/
 tests/
 *.test.js
 *.spec.js
+# Archivos locales de desarrollo, pruebas y ejecucion (no versionar).
+.local/
+.tools/

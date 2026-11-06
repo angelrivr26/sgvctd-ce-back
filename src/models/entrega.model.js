@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 export function createEntregaModel(database) {
   return {
     claim(limit, leaseSeconds) {
-      // FLUJO 16/18: reservar callbacks/correos sin duplicar su ejecucion.
+      // FLUJO 16/18.
+      // LLAMADO POR: workers/procesamiento.worker.js -> deliver().
+      // HACE: reserva entregas PENDIENTES, o PROCESANDO con reserva vencida, sin tomar la misma dos veces.
+      // CONTINUA EN: services/entrega.service.js -> process() (FLUJO 17).
       return database.transaction((tx) =>
         tx.query(
           `WITH candidates AS (
@@ -18,7 +21,10 @@ export function createEntregaModel(database) {
       );
     },
     complete(job, state) {
-      // FIN DEL FLUJO 18: guardar el resultado de la entrega y auditarlo.
+      // FIN DEL FLUJO 18.
+      // LLAMADO POR: entrega.service.js -> process(), cuando el destino respondio bien.
+      // HACE: marca la entrega terminada y deja auditoria. No vuelve a SUNAT.
+      // CONTINUA EN: aqui cierra el recorrido de esa entrega.
       return database.transaction(async (tx) => {
         const updated = await tx.query(
           `UPDATE entregas SET estado=$3,ultimo_error=NULL,
@@ -35,7 +41,9 @@ export function createEntregaModel(database) {
       });
     },
     fail(job, retry, delaySeconds) {
-      // RUTA DE ERROR DE ENTREGA: no cambia el resultado fiscal.
+      // RUTA DE ERROR DE ENTREGA. No cambia el resultado fiscal ni llama a SUNAT.
+      // LLAMADO POR: entrega.service.js -> process(), cuando el callback o el archivo local fallan.
+      // CONTINUA EN: si quedan intentos, el siguiente deliver() vuelve a tomar la misma entrega.
       return database.query(
         `UPDATE entregas SET estado=$3,ultimo_error=$4,
         proximo_intento=now()+($5::int * interval '1 second'),reserva_token=NULL,reserva_hasta=NULL,actualizado_en=now()
