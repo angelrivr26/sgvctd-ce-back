@@ -221,3 +221,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Validación:** se verificó contra el contenido compartido por el usuario; se conserva una declaración de cada URL.
 - **Limitaciones:** no se pudo ejecutar `npm run dev` ni revisar `src/database/schema.js` porque la terminal no está disponible en esta sesión.
 
+# Corrección: detección de tablas del esquema PostgreSQL
+
+- **Alcance:** `src/database/schema.js` verifica tablas y secuencias mediante los catálogos de PostgreSQL y amplía el error con la base, el usuario y el esquema activo de la conexión.
+- **Motivo:** `information_schema` puede ocultar objetos según los privilegios de la conexión y reportar falsamente que faltan tablas.
+- **Validación:** revisión estática del código y contraste con las tablas reportadas por el usuario; no se ejecutaron pruebas porque la terminal no está disponible.
+- **Limitaciones:** si Node se conecta a otra base o esquema, el nuevo error mostrará esa conexión. La aplicación aún necesita permisos para operar sobre las tablas.
+

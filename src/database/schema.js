@@ -40,21 +40,40 @@ export async function verifyDatabaseSchema(database) {
     'sunat_control',
     'sunat_envios',
   ];
+  // information_schema oculta objetos cuando el usuario no tiene privilegios
+  // sobre ellos. El catálogo permite verificar la estructura que creó el DBA.
   const tables = await database.query(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_schema=$1 AND table_type='BASE TABLE'`,
+    `SELECT relation.relname AS table_name
+     FROM pg_catalog.pg_class AS relation
+     JOIN pg_catalog.pg_namespace AS namespace
+       ON namespace.oid = relation.relnamespace
+     WHERE namespace.nspname = $1
+       AND relation.relkind IN ('r', 'p')`,
     [database.schema],
   );
   const existing = new Set(tables.map((row) => row.table_name));
   const missing = requiredTables.filter((table) => !existing.has(table));
   const sequences = await database.query(
-    `SELECT sequence_name FROM information_schema.sequences
-     WHERE sequence_schema=$1 AND sequence_name='sunat_numero_seq'`,
+    `SELECT relation.relname AS sequence_name
+     FROM pg_catalog.pg_class AS relation
+     JOIN pg_catalog.pg_namespace AS namespace
+       ON namespace.oid = relation.relnamespace
+     WHERE namespace.nspname = $1
+       AND relation.relkind = 'S'
+       AND relation.relname = 'sunat_numero_seq'`,
     [database.schema],
   );
   if (!sequences.length) missing.push('sunat_numero_seq');
-  if (missing.length)
-    throw new Error(
-      `Esquema ${database.schema} incompleto. Ejecutar sql/001_esquema.sql. Faltan: ${missing.join(', ')}.`,
+  if (missing.length) {
+    const [connection] = await database.query(
+      `SELECT current_database() AS database_name,
+              current_user AS database_user,
+              current_schema() AS active_schema`,
     );
+    throw new Error(
+      `Esquema ${database.schema} incompleto en base ${connection.database_name} ` +
+        `(usuario ${connection.database_user}, esquema activo ${connection.active_schema || 'ninguno'}). ` +
+        `Ejecutar sql/001_esquema.sql. Faltan: ${missing.join(', ')}.`,
+    );
+  }
 }
