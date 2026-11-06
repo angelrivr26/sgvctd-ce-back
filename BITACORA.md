@@ -1,5 +1,61 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-06 - EXONERADO temporal para pruebas integrales
+
+- Por indicacion del usuario, la configuracion privada del puente local cambia `COMPROBANTES_AFECTACION` de `POR_DEFINIR` a `EXONERADO` para que las compras nuevas de prueba informen la afectacion antes de llegar a Comprobantes. Como salvaguarda transitoria, Comprobantes carga `SUNAT_AFECTACION_POR_DEFINIR=EXONERADO` si recibe un snapshot antiguo sin definir.
+- Se reinician solamente `backend-externo` local en el puerto 3010 y `backend-comprobantes` local en el puerto 4005. No se despliega ningun servicio, no se contacta produccion y no se versionan credenciales ni archivos `.env`.
+- La compra `57896`, congelada previamente con `POR_DEFINIR`, se corrige de forma consistente en Comprobantes y en `sgvcboletos.t_comprobante_integracion`; se recalcula su hash, se registra la auditoria y se reprocesa. Antes de la correccion no tenia serie, numero, diario SUNAT ni resultado fiscal.
+- Validacion funcional: SUNAT beta responde HTTP 200 y CDR codigo `0` para `B001-18`; el comprobante queda `PROCESADO`, fiscal `ACEPTADO`, documentos `DISPONIBLES` y la integracion de Boletos queda `FINALIZADO`. Es una prueba con emisor ficticio y sin validez tributaria.
+- Validacion tecnica: verificador versionado y sintaxis de 44 archivos, formato Prettier, `git diff --check` del backend y build Angular de produccion aprobados. Sin cambios de dependencias.
+- Limitacion: `EXONERADO` es una regla temporal solicitada para pruebas completas. Antes de produccion, Contabilidad debe confirmar la afectacion aplicable y si depende de tarifa, concepto o ANP.
+
+## 2026-11-06 - Reproceso beta de las compras 57894 y 57895
+
+- Por indicacion del usuario se corrige el snapshot tributario congelado de las dos compras del dia: `57894` pasa de `POR_DEFINIR` a `EXONERADO` y `57895` pasa de `POR_DEFINIR` a `INAFECTO`. La correccion se replica en `comprobantes` y `sgvcboletos.t_comprobante_integracion`, recalcula el hash de idempotencia y deja trazabilidad en `auditoria`; no se modifican pagos ni boletos.
+- El primer reproceso detecta `ERR_INVALID_URL` antes de obtener estado HTTP porque `src/config/sunat.js` capturaba los endpoints desde `process.env` al importar el modulo, antes de que `loadConfig()` cargara `.env`. Se corrige para resolver la URL desde el objeto de ambiente recibido, usar como respaldo los endpoints oficiales y exigir HTTPS. `npm run check` incorpora la regresion para override, respaldo beta y rechazo de HTTP.
+- Como ambos diarios estaban en `ENVIO_INICIADO` sin HTTP, fecha ni SOAP, se restauran de forma controlada a `PREPARADO`, conservando sus solicitudes y referencias; no se genera una segunda numeracion. Se reinicia solo `backend-comprobantes` local y el puente de Boletos permanece activo.
+- Validacion: SUNAT beta responde HTTP 200 y CDR codigo `0` para `B001-12` (`EXONERADO`) y `B001-13` (`INAFECTO`). Ambos registros quedan `PROCESADO`, fiscal `ACEPTADO`, documentos `DISPONIBLES`; los callbacks dejan ambas integraciones de Boletos en `FINALIZADO`. Son operaciones de prueba con emisor ficticio en beta, sin validez tributaria ni contacto con produccion.
+- Pruebas: verificador versionado de configuracion, sintaxis de 44 archivos, formato Prettier, `git diff --check` del backend y build Angular de produccion aprobados. La revision equivalente del frontend solo informa espacios finales en `login.component.html`, cambio previo ajeno que se preserva. Sin cambios de dependencias ni credenciales versionadas.
+
+## 2026-11-06 - Puente local para TuTicket desplegado
+
+- Se inicia `backend-externo` local como puente operativo entre la base compartida del TuTicket desplegado y `backend-comprobantes` local en el puerto 4005. No se despliega ni se expone `backend-comprobantes` en el servidor.
+- Motivo: el backend remoto de TuTicket no puede acceder al `localhost` de la estacion de desarrollo; el puente local usa la configuracion privada existente y el flujo HTTP versionado para incorporar compras elegibles.
+- El job normal descubrio y envio las dos compras pagadas del 2026-11-06 que estaban sin fila de integracion. No se editaron compras ni se ejecutaron reintentos manuales.
+- Validacion: la consulta de solo lectura confirma 2 comprobantes del dia en la base local, ambos `REQUIERE_ATENCION` con estado fiscal `PENDIENTE`; Boletos conserva las dos filas correlacionadas con el mismo estado. El puente escucha localmente en el puerto 3010.
+- Limitacion: el proceso local debe permanecer activo mientras Comprobantes no este desplegado; si se detiene la estacion, las compras nuevas permaneceran pendientes hasta reiniciarlo.
+
+## 2026-11-06 - Registro y resumen organizados en pestañas
+
+- La vista de consulta se divide en dos pestañas: `Registro de comprobantes`, activa inicialmente con filtros, tabla y paginacion; y `Resumen`, que contiene los cuatro indicadores de la consulta.
+- Motivo: priorizar el acceso directo a la tabla y conservar los indicadores en una segunda vista sin duplicar consultas ni modificar su actualizacion automatica.
+- Los controles usan semantica `tab`/`tabpanel`, estado `aria-selected` y asociaciones `aria-controls`/`aria-labelledby`; el diseño se adapta al ancho disponible en movil.
+- Sin cambios de dependencias, backend, base de datos, credenciales o integraciones externas.
+- Validacion: build Angular de produccion, formato Prettier y `git diff --check` aprobados. La plantilla compila con `Registro de comprobantes` como pestaña inicial y navegacion por Flecha izquierda/derecha, Inicio y Fin; no se ejecuto E2E de navegador porque requiere los servicios locales autenticados.
+
+## 2026-11-06 - Panel lateral plegable en el frontend
+
+- Se incorpora un boton accesible para ocultar y volver a desplegar el panel lateral que contiene la marca SERNANP, la navegacion y la version de la aplicacion.
+- El contenido principal aprovecha el espacio liberado en escritorio; en movil el panel oculto se reduce a una barra compacta que conserva visible el control de apertura.
+- Motivo: permitir que el usuario amplie el area de consulta sin perder acceso a la navegacion. El control informa su estado con `aria-expanded`, `aria-controls` y una etiqueta dinamica para teclado y lectores de pantalla.
+- Sin cambios de dependencias, backend, base de datos, credenciales o integraciones externas.
+- Validacion: build Angular de produccion, formato Prettier y `git diff --check` aprobados. La plantilla compila con el estado y los atributos accesibles del control; no se ejecuto E2E de navegador porque requiere los servicios locales autenticados y la suite existente aun contiene escenarios del boton de compra de prueba ahora oculto.
+
+## 2026-11-06 - Acceso de compra de prueba oculto
+
+- Se comenta el boton `Compra de prueba` de la cabecera del registro de comprobantes. El codigo se conserva para poder rehabilitarlo de forma controlada.
+- Motivo: retirar de la interfaz el acceso a la creacion manual de compras de prueba sin modificar la consulta, el procesamiento ni los contratos HTTP.
+- Sin cambios de dependencias, credenciales, backend, base de datos o integraciones externas.
+- Validacion: `npm run build` equivalente ejecutado con Angular CLI y Node.js 24.15.0, formato Prettier y revision `git diff --check` aprobados.
+
+## 2026-11-05 - Filtro diario por fecha de pago sin cambiar el reloj del servidor
+
+- La consulta inicia con el dia actual de Lima (`America/Lima`) y conserva un unico dia obligatorio al actualizar, paginar o aplicar filtros adicionales. Limpiar restablece el dia de Lima en vez de consultar todas las fechas.
+- El parametro `fecha=AAAA-MM-DD` ahora filtra `payload.fechaPago` en Lima, campo validado del contrato de Boletos, en lugar de `creado_en`. La respuesta agrega `fechaPago` y la tabla presenta esa fecha como fecha de pago.
+- Motivo: PostgreSQL conserva un reloj adelantado que no se puede modificar; usar su `creado_en` ocultaba compras cuyo pago si corresponde al dia solicitado. La correccion tambien aplica a registros existentes sin alterar sus datos.
+- No se modificaron el reloj, esquema ni filas de la base, y no se aceptan fechas administrativas enviadas por el navegador. Sin cambios de dependencias, credenciales o integraciones externas.
+- Validacion: consulta de solo lectura sobre la base local devuelve los 2 comprobantes con `fechaPago` 2026-11-05; circuito backend 23/23 aprobado, incluido `creado_en` deliberadamente fijado en 2052; sintaxis de 44 archivos, formato y build Angular de produccion aprobados; OpenAPI regenerado. La suite backend completa obtuvo 46/47: permanece una prueba interna ajena a este cambio cuya expresion espera el texto historico `DBA debe ejecutar`, mientras el mensaje vigente indica `Ejecutar sql/001_esquema.sql`.
+
 ## 2026-11-05 - Comentarios de recorrido para lectura de LT
 
 - Cada metodo del flujo 01 a 18 indica quien lo llama, que hace y en que archivo continua. El mapa vive en `application.service.js`.

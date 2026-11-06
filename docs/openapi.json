@@ -252,6 +252,10 @@
           "fechaEmision": {
             "type": ["string", "null"],
             "format": "date-time"
+          },
+          "fechaPago": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -260,7 +264,8 @@
           "estadoFiscal",
           "estadoDocumentos",
           "versionPlantilla",
-          "fechaEmision"
+          "fechaEmision",
+          "fechaPago"
         ]
       }
     }

@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
-const endpoints = Object.freeze({
-  beta: process.env.SUNAT_BETA_URL,
-  production: process.env.SUNAT_PRODUCTION_URL,
+export const officialSunatEndpoints = Object.freeze({
+  beta: 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
+  production: 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
 });
 
 function integer(value, name, min, max) {
@@ -22,13 +22,17 @@ const required = (value, name) => {
 /** Una configuracion y un contrato para beta y produccion; solo cambian credenciales y destino. */
 export function parseSunatConfig(env = {}) {
   const environment = env.SUNAT_ENV ?? 'beta';
-  if (!Object.hasOwn(endpoints, environment))
+  if (!Object.hasOwn(officialSunatEndpoints, environment))
     throw new Error('SUNAT_ENV debe ser beta o production.');
 
   const beta = environment === 'beta';
+  const endpointName = beta ? 'SUNAT_BETA_URL' : 'SUNAT_PRODUCTION_URL';
+  const endpoint = (env[endpointName] || officialSunatEndpoints[environment]).trim();
+  const endpointUrl = new URL(endpoint);
+  if (endpointUrl.protocol !== 'https:') throw new Error(`${endpointName} debe usar HTTPS.`);
   const config = {
     environment,
-    endpoint: endpoints[environment],
+    endpoint,
     timeoutMs: integer(env.SUNAT_TIMEOUT_MS ?? 30000, 'SUNAT_TIMEOUT_MS', 1000, 60000),
     username: env.SUNAT_USERNAME || (beta ? '20000000001MODDATOS' : ''),
     password: env.SUNAT_PASSWORD || (beta ? 'MODDATOS' : ''),
@@ -64,5 +68,3 @@ export function loadSunatConfig({ envFile = resolve('.env'), overrides = {} } = 
   const file = existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {};
   return parseSunatConfig({ ...file, ...process.env, ...overrides });
 }
-
-export const officialSunatEndpoints = endpoints;

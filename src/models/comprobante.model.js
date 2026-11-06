@@ -77,7 +77,10 @@ export function createComprobanteModel(database) {
         clauses.push(expression.replace('?', `$${values.length}`));
       };
       if (filters.fecha)
-        add("(creado_en AT TIME ZONE 'America/Lima')::date = ?::date", filters.fecha);
+        add(
+          "((payload->>'fechaPago')::timestamptz AT TIME ZONE 'America/Lima')::date = ?::date",
+          filters.fecha,
+        );
       if (filters.estado) add('estado = ?', filters.estado);
       if (filters.modalidad) add("payload->>'modalidad' = ?", filters.modalidad);
       if (filters.tipo) add("payload->>'tipoComprobante' = ?", filters.tipo);

@@ -54,6 +54,7 @@ export const openApiDocument = {
           estadoDocumentos: { $ref: '#/components/schemas/EstadoDocumentos' },
           versionPlantilla: { type: ['string', 'null'] },
           fechaEmision: { type: ['string', 'null'], format: 'date-time' },
+          fechaPago: { type: 'string', format: 'date-time' },
         },
         required: [
           'id',
@@ -62,6 +63,7 @@ export const openApiDocument = {
           'estadoDocumentos',
           'versionPlantilla',
           'fechaEmision',
+          'fechaPago',
         ],
       },
     },

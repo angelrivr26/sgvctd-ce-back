@@ -10,6 +10,7 @@ export function presentComprobante(record) {
     comprador: record.payload.comprador,
     total: record.payload.total,
     moneda: record.payload.moneda,
+    fechaPago: record.payload.fechaPago,
     cantidadBoletos: record.payload.detalle.reduce((sum, item) => sum + item.boletoIds.length, 0),
     estado: record.estado,
     estadoFiscal: record.estado_fiscal,
