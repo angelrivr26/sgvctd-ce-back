@@ -1,6 +1,9 @@
 {
   "name": "sernanp-backend-comprobantes",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20 <21"
+  },
   "private": true,
   "type": "module",
   "description": "Integracion y gestion asincrona de comprobantes electronicos SUNAT",

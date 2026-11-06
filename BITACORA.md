@@ -284,3 +284,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Validación:** revisión estática del código y contraste con las tablas reportadas por el usuario; no se ejecutaron pruebas porque la terminal no está disponible.
 - **Limitaciones:** si Node se conecta a otra base o esquema, el nuevo error mostrará esa conexión. La aplicación aún necesita permisos para operar sobre las tablas.
 
+# Configuración de runtime Node.js 20
+
+- **Alcance:** el backend declara soporte para Node.js 20 en `package.json` y fija Node.js 20.20.2 en `.nvmrc`.
+- **Motivo:** alinear el runtime del backend con el requisito solicitado sin cambiar funcionalidades ni frontend.
+- **Validación:** revisión del cambio de configuración; no fue posible leer el lockfile ni ejecutar npm en esta sesión porque la herramienta de terminal falló al iniciar.
+- **Limitaciones:** las dependencias y el arranque aún deben validarse bajo Node.js 20. Esta rama de Node está fuera de mantenimiento oficial desde el 24 de marzo de 2026.
+
