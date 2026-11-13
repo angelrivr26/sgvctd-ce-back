@@ -3,10 +3,10 @@ node_modules/
 .local/
 .tools/
 coverage/
-*.log
 tests/
-*.test.js
-*.spec.js
+*.log
+# Copia generada bajo demanda con `npm run docs:api`.
+docs/openapi.json
 # Archivos locales de desarrollo, pruebas y ejecucion (no versionar).
 .local/
 .tools/

@@ -29,13 +29,13 @@ export function presentComprobante(record) {
   };
 }
 
-export function createComprobanteService(model, archivo) {
+export function createComprobanteService(model, documentos) {
   return {
     async receive(input, actor) {
-      // FLUJO 03/18.
+      // FASE 1/6: validacion del contrato de entrada.
       // LLAMADO POR: controllers/comprobante.controller.js -> receive().
       // HACE: valida el contrato de la compra. Si el JSON es invalido, no se guarda nada.
-      // CONTINUA EN: models/comprobante.model.js -> receive() (FLUJO 04).
+      // CONTINUA EN: models/comprobante.model.js -> receive().
       const payload = compraSchema.parse(input);
       const { record, duplicate } = await model.receive(payload, actor);
       return { comprobante: presentComprobante(record), duplicado: duplicate };
@@ -72,7 +72,7 @@ export function createComprobanteService(model, archivo) {
     retryDeliveries: (id, actor) => model.retryDeliveries(id, actor),
     async download(id, type) {
       const document = await model.document(id, type);
-      return { content: await archivo.read(document), hash: document.sha256 };
+      return { content: await documentos.read(document), hash: document.sha256 };
     },
   };
 }

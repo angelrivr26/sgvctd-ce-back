@@ -15,10 +15,10 @@ export function createComprobanteRouter(controller, middleware) {
 export function createIntegrationRouter(controller, middleware) {
   const router = Router();
   router.use(middleware.integration);
-  // FLUJO 01/18. Aqui empieza el recorrido dentro de este proyecto.
+  // FASE 1/6. Aqui empieza la recepcion dentro de este proyecto.
   // LLAMADO POR: backend-externo, comprobantes-http.service.js -> POST /compras.
   // HACE: exige la API key y entrega el cuerpo al controlador.
-  // CONTINUA EN: controllers/comprobante.controller.js -> receive() (FLUJO 02).
+  // CONTINUA EN: controllers/comprobante.controller.js -> receive().
   router.post('/compras', controller.receive);
   router.get('/comprobantes/:id', controller.detail);
   router.get('/comprobantes/:id/documentos/:tipo', controller.download);

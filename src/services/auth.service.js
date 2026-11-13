@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { digest, verifyPassword, secureEqual } from '../utils/security.js';
 import { AppError } from '../utils/errors.js';
+import { applicationNow, addHours } from '../utils/time.js';
 
 export function createAuthService(database, config) {
   return {
@@ -9,11 +10,12 @@ export function createAuthService(database, config) {
       if (!secureEqual(username, config.adminUsername) || !validPassword)
         throw new AppError(401, 'ACCESO_INVALIDO', 'Usuario o clave incorrectos.');
       const token = randomBytes(32).toString('hex');
-      await database.query('DELETE FROM sesiones WHERE expira_en < now() RETURNING token_hash');
+      const now = applicationNow();
+      await database.query('DELETE FROM sesiones WHERE expira_en < $1 RETURNING token_hash', [now]);
       await database.query(
         `INSERT INTO sesiones(token_hash,usuario,expira_en)
-        VALUES($1,$2,now()+($3::int * interval '1 hour')) RETURNING usuario`,
-        [digest(token), username, config.sessionHours],
+        VALUES($1,$2,$3) RETURNING usuario`,
+        [digest(token), username, addHours(now, config.sessionHours)],
       );
       return { token, usuario: username };
     },
@@ -21,8 +23,8 @@ export function createAuthService(database, config) {
       if (!token || !/^[a-f0-9]{64}$/.test(token))
         throw new AppError(401, 'SESION_REQUERIDA', 'Inicie sesion para continuar.');
       const rows = await database.query(
-        'SELECT usuario FROM sesiones WHERE token_hash=$1 AND expira_en>now()',
-        [digest(token)],
+        'SELECT usuario FROM sesiones WHERE token_hash=$1 AND expira_en>$2',
+        [digest(token), applicationNow()],
       );
       if (!rows.length)
         throw new AppError(

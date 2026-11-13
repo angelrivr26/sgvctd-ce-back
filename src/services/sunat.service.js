@@ -2,9 +2,7 @@ import { zipSync, unzipSync } from 'fflate';
 import { createSunatModel } from '../models/sunat.model.js';
 import { ProviderError } from '../utils/errors.js';
 import { parseXml, uniqueElement, escapeXml } from '../utils/xml.js';
-import { createSunatRequest } from './xml-ubl.service.js';
-import { loadSunatCertificate } from './certificado.service.js';
-import { signUblXml } from './firma-xml.service.js';
+import { createSunatRequest, loadSunatCertificate, signUblXml } from './sunat-documento.service.js';
 
 const soapNamespace = 'http://schemas.xmlsoap.org/soap/envelope/';
 const cbcNamespace = 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2';
@@ -29,10 +27,10 @@ async function readResponse(response) {
 }
 
 export function parseSunatResponse(text, httpStatus, expectedReference, expectedFileName) {
-  // FLUJO 10/18. No llama a SUNAT; solo lee un SOAP que ya esta en memoria o en el diario.
+  // FASE 3/6. No llama a SUNAT; solo lee un SOAP que ya esta en memoria o en el diario.
   // LLAMADO POR: createSunatTransport().send() y por consultarResultado() si la respuesta ya estaba guardada.
   // HACE: distingue Fault, rechazo y CDR con codigo 0. Exige que el XML corresponda al comprobante enviado.
-  // CONTINUA EN: consultarResultado() arma el resultado y procesamiento.service.js decide en FLUJO 11.
+  // CONTINUA EN: consultarResultado() arma el resultado y procesamiento.service.js decide.
   const document = parseXml(text, maxResponse);
   if (
     document.documentElement.localName !== 'Envelope' ||
@@ -131,10 +129,10 @@ export function createSunatTransport({
       return { estado: 'WSDL_DISPONIBLE', ambiente: config.environment, endpoint: config.endpoint };
     },
     async send(request) {
-      // FLUJO 09/18. Unica llamada de red sendBill de este proyecto.
+      // FASE 2/6. Unica llamada de red sendBill de este proyecto.
       // LLAMADO POR: createSunatProvider() -> sendPreparedRequest().
       // HACE: comprime el XML, arma el SOAP, marca el envio, espera la respuesta y la guarda cruda.
-      // CONTINUA EN: parseSunatResponse() (FLUJO 10). onPrepared corre antes del POST; onResponse, justo despues.
+      // CONTINUA EN: parseSunatResponse(). onPrepared corre antes del POST; onResponse, justo despues.
       if (
         !/^\d{11}-(01|03)-[A-Z0-9]{4}-[1-9]\d{0,7}$/.test(request.nombreArchivo) ||
         !request.nombreArchivo.endsWith(`-${request.referencia}`)
@@ -176,10 +174,10 @@ export function createSunatProvider(
   const model = createSunatModel(database);
 
   async function consultarResultado(id) {
-    // FLUJO 07/18.
+    // FASE 3/6.
     // LLAMADO POR: confirmEmission(), solicitarEmision() y sendPreparedRequest() despues del POST.
     // HACE: lee sunat_envios. Sin fila o en PREPARADO devuelve null. Con SOAP guardado lo interpreta.
-    // CONTINUA EN: null sigue a prepareRequest() (FLUJO 08). SOAP guardado salta a FLUJO 10 sin red.
+    // CONTINUA EN: null sigue a prepareRequest(). SOAP guardado se interpreta sin usar la red.
     const row = await model.get(id);
     if (!row || row.estado === 'PREPARADO') return null;
     if (row.estado === 'ENVIO_INICIADO')
@@ -227,14 +225,14 @@ export function createSunatProvider(
   }
 
   async function prepareRequest(payload, id) {
-    // FLUJO 08/18, preparacion local.
+    // FASE 2/6, preparacion local.
     // LLAMADO POR: solicitarEmision(), solo cuando consultarResultado() devolvio null.
     // HACE: si el diario ya tiene la fila, la reutiliza. Si no, numera, crea UBL, firma y guarda.
     // CONTINUA EN: sendPreparedRequest(). La red empieza recien ahi.
     let row = await model.get(id);
     if (row) return row;
 
-    // FLUJO 08/18: crear UBL, firmarla y guardarla antes de usar la red.
+    // FASE 2/6: crear UBL, firmarla y guardarla antes de usar la red.
     const request = createSunatRequest(payload, config, {
       numero: await model.nextNumber(),
     });
@@ -243,7 +241,7 @@ export function createSunatProvider(
   }
 
   async function sendPreparedRequest(row, id) {
-    // FLUJO 09/18, orquestacion del POST.
+    // FASE 2/6, orquestacion del POST.
     // LLAMADO POR: solicitarEmision().
     // HACE: conecta el transporte con el diario. Si otro proceso ya envia, espera. Si el POST falla despues de iniciar, no lo repite.
     // CONTINUA EN: transport.send() y, al terminar, otra vez consultarResultado().
@@ -276,7 +274,7 @@ export function createSunatProvider(
 
   return {
     consultarResultado,
-    // FLUJO 07 a 09, entrada publica del proveedor.
+    // FASE 2/6, entrada publica del proveedor.
     // LLAMADO POR: services/procesamiento.service.js -> confirmEmission().
     // HACE: relee el diario, prepara solo si falta la solicitud y envia una sola vez.
     // CONTINUA EN: consultarResultado(), prepareRequest() y sendPreparedRequest().

@@ -1,6 +1,112 @@
+import { existsSync } from 'node:fs';
+import { mkdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { X509Certificate } from 'node:crypto';
+import { SignedXml } from 'xml-crypto';
 import { compraSchema, cents } from '../validators/compra.validator.js';
-import { escapeXml as x } from '../utils/xml.js';
+import { escapeXml as x, parseXml, uniqueElement } from '../utils/xml.js';
 import { ProviderError } from '../utils/errors.js';
+
+const ds = 'http://www.w3.org/2000/09/xmldsig#';
+const c14n = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+
+/** Lee el certificado institucional o crea uno local exclusivamente para SUNAT beta. */
+export async function loadSunatCertificate(config) {
+  let privateKeyPath = config.privateKeyPath;
+  let certificatePath = config.certificatePath;
+
+  if (!privateKeyPath && !certificatePath && config.environment === 'beta') {
+    await mkdir(config.certificateDirectory, { recursive: true });
+    privateKeyPath = join(config.certificateDirectory, 'sunat-private.pem');
+    certificatePath = join(config.certificateDirectory, 'sunat-certificate.pem');
+    if (existsSync(privateKeyPath) !== existsSync(certificatePath))
+      throw new Error('Certificado SUNAT incompleto. Revise la carpeta sin sobrescribir claves.');
+    if (!existsSync(privateKeyPath)) {
+      const openssl =
+        process.env.OPENSSL_BIN ||
+        (process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe')
+          ? 'C:/Program Files/Git/usr/bin/openssl.exe'
+          : 'openssl');
+      const generated = spawnSync(
+        openssl,
+        [
+          'req',
+          '-x509',
+          '-newkey',
+          'rsa:2048',
+          '-nodes',
+          '-sha256',
+          '-days',
+          '365',
+          '-keyout',
+          privateKeyPath,
+          '-out',
+          certificatePath,
+          '-subj',
+          '/C=PE/O=SOLO PRUEBA SUNAT BETA/CN=EMISOR FICTICIO/serialNumber=20000000001',
+        ],
+        { encoding: 'utf8', timeout: 30000, windowsHide: true },
+      );
+      if (generated.error || generated.status !== 0)
+        throw new Error(
+          'No se pudo generar el certificado beta. Instale OpenSSL o configure OPENSSL_BIN.',
+        );
+    }
+  }
+
+  if (!privateKeyPath || !certificatePath)
+    throw new Error('Faltan las rutas del certificado y la clave privada SUNAT.');
+  const [privateKey, certificate] = await Promise.all([
+    readFile(privateKeyPath, 'utf8'),
+    readFile(certificatePath, 'utf8'),
+  ]);
+  const parsed = new X509Certificate(certificate);
+  if (Date.parse(parsed.validTo) <= Date.now())
+    throw new Error('El certificado SUNAT esta vencido.');
+  if (config.environment === 'beta' && !parsed.subject.includes('SOLO PRUEBA SUNAT BETA'))
+    throw new Error('Beta requiere el certificado local identificado como SOLO PRUEBA SUNAT BETA.');
+  return { privateKey, certificate };
+}
+
+/** Firma local; la clave privada nunca se incorpora al XML ni sale del proceso. */
+export function signUblXml(xml, { privateKey, certificate }) {
+  const document = parseXml(xml);
+  if (
+    document.documentElement.localName !== 'Invoice' ||
+    document.getElementsByTagNameNS(ds, 'Signature').length
+  )
+    throw new Error('Se requiere un Invoice sin firma previa.');
+  uniqueElement(
+    document,
+    'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2',
+    'ExtensionContent',
+  );
+  const signature = new SignedXml({
+    privateKey,
+    publicCert: certificate,
+    signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+    canonicalizationAlgorithm: c14n,
+  });
+  signature.addReference({
+    xpath: '/*',
+    isEmptyUri: true,
+    transforms: [`${ds}enveloped-signature`, c14n],
+    digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+  });
+  signature.computeSignature(xml, {
+    prefix: 'ds',
+    attrs: { Id: 'SignatureSP' },
+    location: { reference: "//*[local-name()='ExtensionContent']", action: 'append' },
+  });
+  const signed = signature.getSignedXml();
+  const signedDocument = parseXml(signed);
+  const verifier = new SignedXml({ publicCert: certificate, getCertFromKeyInfo: () => null });
+  verifier.loadSignature(uniqueElement(signedDocument, ds, 'Signature'));
+  if (!verifier.checkSignature(signed) || verifier.getSignedReferences().length !== 1)
+    throw new Error('La firma generada no supero la verificacion local.');
+  return { xml: signed, digestValue: uniqueElement(signedDocument, ds, 'DigestValue').textContent };
+}
 
 const taxes = {
   GRAVADO: { reason: '10', id: '1000', name: 'IGV', type: 'VAT' },
@@ -18,10 +124,10 @@ const subtotal = (line, withReason = false) =>
 
 /** Genera la misma UBL para beta o produccion; ambiente, series y local provienen de .env. */
 export function createSunatRequest(input, config, { numero, now = new Date() }) {
-  // FLUJO 08/18, construccion del XML.
+  // FASE 2/6: construye el UBL con los importes y afectaciones recibidos.
   // LLAMADO POR: sunat.service.js -> prepareRequest().
   // HACE: valida impuestos y arma Invoice UBL 2.1. No usa red ni base de datos.
-  // CONTINUA EN: firma-xml.service.js -> signUblXml().
+  // CONTINUA EN: signUblXml() dentro de este modulo.
   // DENTRO: 1 compra y numero, 2 lineas e impuesto, 3 serie y fecha Lima, 4 XML de cabecera y detalle.
   const payload = compraSchema.parse(input);
   if (config.environment === 'beta' && payload.emisor.ruc !== '20000000001')

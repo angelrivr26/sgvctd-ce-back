@@ -4,6 +4,10 @@ import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { officialSunatEndpoints, parseSunatConfig } from '../src/config/sunat.js';
 
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+assert.equal(nodeMajor, 20, 'Las verificaciones deben ejecutarse con Node.js 20.');
+assert.ok(nodeMinor >= 12, 'Se requiere Node.js 20.12 o superior.');
+
 async function files(folder) {
   const entries = await readdir(folder, { withFileTypes: true });
   const nested = await Promise.all(
@@ -13,7 +17,7 @@ async function files(folder) {
   );
   return nested.flat();
 }
-const javascript = (await Promise.all(['src', 'scripts'].map(files)))
+const javascript = (await Promise.all(['src', 'scripts', 'tests'].map(files)))
   .flat()
   .filter((file) => file.endsWith('.js'));
 for (const file of javascript) {

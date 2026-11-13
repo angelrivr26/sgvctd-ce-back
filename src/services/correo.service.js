@@ -5,7 +5,7 @@ import { join } from 'node:path';
 export function createCorreoService(directory) {
   return {
     async send(job, detail) {
-      // FLUJO 18/18, correo.
+      // FASE 5/6, correo de prueba.
       // LLAMADO POR: entrega.service.js -> process(), cuando el trabajo es tipo CORREO.
       // HACE: escribe un JSON local. No abre SMTP ni escribe al comprador.
       // CONTINUA EN: entrega.model.js -> complete(), con estado CAPTURADO_PRUEBA.

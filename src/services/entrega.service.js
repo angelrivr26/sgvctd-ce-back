@@ -1,10 +1,10 @@
 export function createEntregaService({ model, comprobantes, correo, integracion, config }) {
   return {
     async process(job) {
-      // FLUJO 17/18.
+      // FASES 5 y 6/6: despachador de entregas independientes.
       // LLAMADO POR: workers/procesamiento.worker.js -> deliver().
       // HACE: carga el comprobante y elige un solo destino: CORREO o BOLETOS.
-      // CONTINUA EN: correo.service.js -> send() o integracion-boletos.service.js -> notify() (FLUJO 18).
+      // CONTINUA EN: correo.service.js -> send() o integracion-boletos.service.js -> notify().
       try {
         const detail = await comprobantes.detail(job.comprobante_id);
         const state =

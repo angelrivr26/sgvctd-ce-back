@@ -1,5 +1,153 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-12 - Fechas operativas generadas por el backend
+
+- Alcance: las nuevas recepciones, auditorias, sesiones, reservas, reintentos, entregas y registros
+  SUNAT envian fechas ISO generadas por Node.js como parametros SQL. Las comparaciones de vencimiento
+  tambien usan esa misma referencia y dejan de depender de `now()` de PostgreSQL. Los comprobantes y
+  documentos historicos no se actualizan.
+- Motivo: el servidor PostgreSQL de desarrollo conserva su reloj adelantado a 2052 y no existe acceso
+  de infraestructura para corregirlo. La aplicacion necesita fechas actuales y coherentes para nuevas
+  operaciones sin alterar el flujo fiscal, los estados ni la idempotencia.
+- Validacion: 14/14 pruebas del backend aprobadas, incluida una base con defaults deliberadamente
+  fijados en 2052; la recepcion, auditoria y reserva quedaron dentro del reloj de Node.js. `npm run check`
+  verifico la sintaxis. La suite de Boletos aprobo 15 casos funcionales y mantiene un caso E2E
+  historico bloqueado porque importa `database/migrate.js`, retirado antes de este cambio.
+- Limitaciones: los defaults `now()` permanecen en el SQL administrativo como respaldo, pero el
+  runtime vigente envia todos los tiempos operativos. `sunat_control` normaliza al primer envio su
+  unica fila inactiva si conserva una fecha heredada muy futura; no modifica comprobantes anteriores.
+
+## 2026-11-11 - Ambientes local y desarrollo para frontend-comprobantes
+
+- Alcance: `frontend-comprobantes` incorpora archivos de ambiente explicitos para desarrollo
+  local, desarrollo desplegado y produccion. Todos conservan `API_URL=/api/v1` para mantener las
+  solicitudes y la cookie de sesion en el mismo origen. Se agregan comandos `start:local`,
+  `start:desarrollo` y `build:desarrollo`; el proxy local apunta a `127.0.0.1:4005` y el proxy de
+  desarrollo apunta a `https://desarrollo.sernanp.gob.pe`. El README documenta los comandos y la
+  responsabilidad del proxy inverso del servidor. No se modifican contratos HTTP, componentes,
+  credenciales ni `frontend-externo`.
+- Motivo: permitir terminar pruebas contra servicios locales y generar el mismo frontend para el
+  servidor de desarrollo sin comentar/descomentar URLs ni introducir variables `.env` en el
+  navegador. Angular selecciona el ambiente durante `ng serve` o `ng build`; las variables privadas
+  permanecen exclusivamente en los backends.
+- Validacion: aprobaron `npm run build` y `npm run build:desarrollo`, ambos con bundle inicial de
+  317.62 kB. El modo local servido temporalmente en el puerto 4215 respondio HTTP 200 para la
+  aplicacion y para `/api/health` a traves del proxy, confirmando
+  `development / SUNAT_BETA`. El modo desarrollo servido temporalmente en 4216 compilo y respondio
+  HTTP 200 para la aplicacion. Antes de este cambio tambien aprobaron 13/13 pruebas y `npm run check`
+  del backend refactorizado.
+- Limitaciones: `https://desarrollo.sernanp.gob.pe/api/health` responde actualmente HTTP 404; el
+  servidor aun debe desplegar `backend-comprobantes` y dirigir de forma especifica `/api/v1` hacia
+  ese servicio. El proxy de Angular solo existe durante `ng serve` y no forma parte de los archivos
+  estaticos generados. No se proceso ni reintento la compra 57910 durante esta adecuacion.
+
+## 2026-11-08 - Frontend compatible con Node.js 20 mediante Angular 21
+
+- Alcance: el frontend cambia de Angular 22.2 a Angular 21.2, alinea Angular Core, CLI, Build y
+  Compiler CLI en sus ultimos parches de la rama 21, usa TypeScript 5.9.3 y fija `.nvmrc` en
+  Node.js 20.20.2. Se actualizan exclusivamente `package.json`, `package-lock.json` y `.nvmrc`;
+  no se modifican componentes, plantillas, estilos, servicios, rutas ni contratos HTTP.
+- Motivo: Angular 22 exige Node.js 22.22.3 o superior y no puede ejecutarse con el runtime
+  Node.js 20 requerido por la solucion. Angular 21 admite Node.js 20 desde la version 20.19.0.
+- Validacion: con Node.js 20.20.2, el arbol instalado queda en Angular Core 21.2.26,
+  CLI/Build 21.2.29 y TypeScript 5.9.3; `npm run build` de produccion aprueba y `npm start`
+  compila en modo desarrollo y publica localmente en el puerto 4205. `npm audit --omit=dev`
+  informa cero vulnerabilidades y `git diff --check` aprueba.
+- Limitaciones: la auditoria completa informa 16 vulnerabilidades moderadas transitivas en las
+  herramientas de desarrollo de Angular CLI 21, sin correccion compatible dentro de la rama;
+  no se aplica `npm audit fix --force`. No se ejecuta la suite E2E porque crea comprobantes y
+  depende del backend y de credenciales locales; ademas conserva escenarios anteriores del boton
+  de compra de prueba actualmente oculto.
+
+## 2026-11-08 - Instalacion protegida para Node.js 20
+
+- Alcance: se restauran `.npmrc` y `.nvmrc`, y `package.json` incorpora un `preinstall` que valida
+  Node.js `>=20.12 <21` mediante `scripts/verificar-node.js`.
+- Motivo: impedir que `npm install` continue con Node.js 24 despues de mostrar solamente una
+  advertencia de `engines`.
+- Validacion: el runtime Node.js 20.20.2 aprueba el validador, las pruebas y el chequeo del backend;
+  npm bajo Node.js 24 debe finalizar con `EBADENGINE` antes de instalar.
+- Limitaciones: ningun campo de `package.json` puede reemplazar el runtime del sistema. La seleccion
+  automatica depende de abrir una terminal nueva de VS Code, usar NVM o instalar Node.js 20 como
+  version predeterminada.
+
+## 2026-11-08 - Pruebas internas excluidas de Git
+
+- Alcance: se agrega `tests/` a `.gitignore`; la suite permanece disponible solamente en el
+  entorno local de desarrollo. Los comandos de formato dejan de depender de esa carpeta y la guia
+  tecnica aclara que `npm test` requiere la suite interna.
+- Motivo: evitar que las pruebas internas se incorporen a los commits o a la entrega del backend.
+- Validacion: la suite local continua ejecutable con `npm test`; `npm run check` sigue validando el
+  codigo versionado.
+- Limitaciones: un clon nuevo no recibira la carpeta `tests/` y no podra ejecutar `npm test` hasta
+  que el equipo proporcione internamente esa suite.
+
+## 2026-11-08 - Documentacion tecnica trasladada y actualizada
+
+- Alcance: `BACKEND_Y_ARQUITECTURA.md` e `INTEGRACION_BOLETOS.md` pasan de `docs/` a la raiz; se
+  actualizan sus contenidos, los enlaces del README y los patrones de formato que apuntaban a la
+  carpeta retirada.
+- Motivo: reunir la documentacion principal en un solo nivel y describir el flujo actual de seis
+  fases, las consultas del frontend, el contrato HTTP y las limitaciones de esta entrega.
+- Validacion: la documentacion se contrasto con rutas, composicion, servicios, configuracion,
+  esquema SQL y scripts vigentes. Con Node.js 20.20.2 aprobaron 13/13 pruebas, la sintaxis de 49
+  archivos y el formato del backend. No se modificaron contratos, codigo de ejecucion ni
+  dependencias.
+- Limitaciones: la configuracion de produccion no constituye certificacion ni autorizacion fiscal;
+  correo, callbacks sin URL y almacenamiento continuan siendo locales para desarrollo. El formato
+  conjunto permanece pendiente por dos HTML preexistentes de `frontend-comprobantes`, fuera de este
+  cambio.
+
+## 2026-11-08 - Retiro de la copia estatica OpenAPI
+
+- Alcance: se elimina `docs/openapi.json`, se ignora su regeneracion local y el README pasa a
+  indicar el endpoint dinamico `GET /api/openapi.json`.
+- Motivo: el JSON era una copia generada de `src/routes/openapi.js` y no era necesario para
+  ejecutar ni integrar el backend.
+- Validacion: se conserva la definicion OpenAPI usada por la aplicacion, su endpoint HTTP y el
+  generador `npm run docs:api`; no se modificaron rutas ni contratos.
+- Limitaciones: para entregar una copia importable sin iniciar el backend se debe ejecutar
+  `npm run docs:api`, lo que volvera a crear `docs/openapi.json` localmente.
+
+## 2026-11-08 - Retiro del reporte generado de dependencias
+
+- Alcance: se elimina `docs/auditoria-dependencias.json`; se conserva
+  `scripts/auditar-dependencias.js` para ejecutar futuras revisiones.
+- Motivo: el JSON era una evidencia generada y redundante que no forma parte del runtime ni del
+  contrato HTTP del backend.
+- Validacion: cambio exclusivamente documental; no se modificaron dependencias, codigo de
+  ejecucion ni `docs/openapi.json`.
+- Limitaciones: cuando cambien dependencias se debe volver a ejecutar la auditoria y registrar el
+  resultado relevante en esta bitacora.
+
+## 2026-11-08 - Flujo de seis fases y runtime unico Node.js 20
+
+- Alcance: el recorrido tecnico se presenta en seis fases de negocio: recepcion, envio SUNAT,
+  respuesta, documentos, correo de prueba y callback a Boletos. `src/composition.js` reemplaza al
+  servicio de composicion anterior y solo expone autenticacion, consultas/comandos de comprobantes
+  y worker; no cambian las rutas HTTP versionadas, los estados, las tablas ni el contrato con
+  `backend-externo` y el frontend.
+- Simplificacion: PDF, almacenamiento e integridad se concentran en `documentos.service.js`; UBL,
+  certificado y firma se concentran en `sunat-documento.service.js`. Se retiran seis servicios
+  auxiliares y se mantiene separado el transporte/diario SUNAT, el correo y la notificacion a
+  Boletos. La recepcion sigue persistiendo antes del `202`, y las reservas, idempotencia, reintentos
+  y recuperacion documental conservan su comportamiento.
+- Runtime: manifiesto, lockfile, terminal de VS Code y scripts locales quedan limitados a Node.js
+  `>=20.12 <21`; el runtime portatil verificado es `20.20.2`. `.npmrc` rechaza instalaciones con una
+  rama distinta. Node 20 esta fuera de mantenimiento oficial y se conserva por compatibilidad con
+  el servidor compartido de Boletos.
+- Pruebas: se restaura `npm test` como suite versionada. Con Node.js 20.20.2 aprueban 13/13 casos de
+  contrato, reglas monetarias, UBL beta, circuito PGlite completo, consulta/listado/descarga,
+  documentos e integridad, correo capturado, idempotencia concurrente, aceptacion/rechazo,
+  recuperacion sin reenvio a SUNAT y concurrencia del worker. `npm run check` aprueba sintaxis y
+  configuracion, el formato Prettier queda conforme y el diagnostico de solo lectura confirma el
+  WSDL de SUNAT beta disponible. `npm audit --audit-level=low` informa cero vulnerabilidades; no se
+  modificaron dependencias.
+- Limitaciones: el correo continua como captura JSON local y no usa SMTP. No se realizo una emision
+  SUNAT ni se contacto produccion; la unica llamada externa fue la consulta WSDL de beta. Beta sigue
+  usando emisor/certificado de prueba sin validez tributaria. El almacenamiento permanece local y
+  requiere sustitucion si se despliegan varias instancias.
+
 ## 2026-11-06 - EXONERADO temporal para pruebas integrales
 
 - Por indicacion del usuario, la configuracion privada del puente local cambia `COMPROBANTES_AFECTACION` de `POR_DEFINIR` a `EXONERADO` para que las compras nuevas de prueba informen la afectacion antes de llegar a Comprobantes. Como salvaguarda transitoria, Comprobantes carga `SUNAT_AFECTACION_POR_DEFINIR=EXONERADO` si recibe un snapshot antiguo sin definir.

@@ -4,6 +4,9 @@ import { databaseSchema } from '../database/schema.js';
 import { parseSunatConfig } from './sunat.js';
 
 export function loadConfig(overrides = {}) {
+  const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+  if (nodeMajor !== 20 || nodeMinor < 12)
+    throw new Error('Este backend requiere Node.js 20.12 o superior dentro de la rama 20.');
   const envPath = resolve('.env');
   if (existsSync(envPath) && !process.env.COMPROBANTES_SKIP_ENV) process.loadEnvFile(envPath);
   const env = { ...process.env, ...overrides };

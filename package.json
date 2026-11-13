@@ -2,23 +2,22 @@
   "name": "sernanp-backend-comprobantes",
   "version": "0.1.0",
   "engines": {
-    "node": ">=20 <21"
+    "node": ">=20.12.0 <21"
   },
   "private": true,
   "type": "module",
   "description": "Integracion y gestion asincrona de comprobantes electronicos SUNAT",
-  "engines": {
-    "node": ">=24.15.0 <25"
-  },
   "scripts": {
+    "preinstall": "node scripts/verificar-node.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "worker": "node src/worker.js",
     "setup:local": "node scripts/setup-local.js",
     "sunat:diagnostico": "node scripts/diagnosticar-sunat.js",
+    "test": "node --test --test-concurrency=1 tests/index.test.js",
     "check": "node scripts/check.js",
-    "format": "prettier --write src scripts docs *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
-    "format:check": "prettier --check src scripts docs *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
+    "format": "prettier --write src scripts *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
+    "format:check": "prettier --check src scripts *.md *.json ../frontend-comprobantes/src ../frontend-comprobantes/tests ../frontend-comprobantes/*.json ../frontend-comprobantes/*.ts ../frontend-comprobantes/*.md",
     "audit:dependencies": "npm audit --audit-level=low",
     "audit:projects": "node scripts/auditar-dependencias.js",
     "docs:api": "node scripts/generar-openapi.js"

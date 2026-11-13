@@ -1,3 +1,5 @@
+import { applicationNow, addMilliseconds, addSeconds } from '../utils/time.js';
+
 export function createSunatModel(database) {
   const get = async (id) =>
     (await database.query('SELECT * FROM sunat_envios WHERE comprobante_id=$1', [id]))[0] ?? null;
@@ -9,28 +11,39 @@ export function createSunatModel(database) {
       );
     },
     async prepare(id, request) {
-      // FLUJO 08/18, persistencia.
+      // FASE 2/6, persistencia previa al envio.
       // LLAMADO POR: sunat.service.js -> prepareRequest(), despues de signUblXml().
       // HACE: inserta la UBL firmada en sunat_envios con estado PREPARADO. No abre red.
       // CONTINUA EN: sunat.service.js -> sendPreparedRequest().
+      const now = applicationNow();
       await database.query(
-        `INSERT INTO sunat_envios(comprobante_id,ambiente,serie,numero,solicitud)
-         VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(comprobante_id) DO NOTHING RETURNING comprobante_id`,
-        [id, request.ambiente, request.serie, request.numero, JSON.stringify(request)],
+        `INSERT INTO sunat_envios(comprobante_id,ambiente,serie,numero,solicitud,creado_en)
+         VALUES($1,$2,$3,$4,$5::jsonb,$6)
+         ON CONFLICT(comprobante_id) DO NOTHING RETURNING comprobante_id`,
+        [id, request.ambiente, request.serie, request.numero, JSON.stringify(request), now],
       );
       return get(id);
     },
     async beginSend(id, zip, timeoutMs) {
-      // FLUJO 09/18, compuerta.
+      // FASE 2/6, compuerta de envio.
       // LLAMADO POR: sunat.service.js -> transport.send(), callback onPrepared, antes del POST.
       // HACE: deja pasar un solo envio a la vez y cambia la fila a ENVIO_INICIADO.
       // CONTINUA EN: el mismo transport.send() hace el POST. Si devuelve false, no hay red.
+      const now = applicationNow();
+      const availableAt = addMilliseconds(now, timeoutMs + 10000);
       return database.transaction(async (tx) => {
+        // Una fila de control inactiva creada con el reloj historico de BD se normaliza
+        // una sola vez; no modifica comprobantes ni diarios fiscales anteriores.
+        await tx.query(
+          `UPDATE sunat_control SET disponible_desde=$1
+           WHERE id=1 AND operacion_id IS NULL AND disponible_desde>$2 RETURNING id`,
+          [now, addSeconds(now, 600)],
+        );
         const gate = await tx.query(
           `UPDATE sunat_control SET operacion_id=$1,
-           disponible_desde=now()+($2::int * interval '1 millisecond')
-           WHERE id=1 AND disponible_desde<=now() RETURNING id`,
-          [id, timeoutMs + 10000],
+           disponible_desde=$2
+           WHERE id=1 AND disponible_desde<=$3 RETURNING id`,
+          [id, availableAt, now],
         );
         if (!gate.length) return false;
         const started = await tx.query(
@@ -40,14 +53,15 @@ export function createSunatModel(database) {
         );
         if (!started.length)
           await tx.query(
-            'UPDATE sunat_control SET disponible_desde=now(),operacion_id=NULL WHERE id=1 AND operacion_id=$1 RETURNING id',
-            [id],
+            `UPDATE sunat_control SET disponible_desde=$2,operacion_id=NULL
+             WHERE id=1 AND operacion_id=$1 RETURNING id`,
+            [id, now],
           );
         return started.length === 1;
       });
     },
     async saveResponse(id, { text, httpStatus }, date) {
-      // FLUJO 10/18, diario crudo.
+      // FASE 3/6, diario crudo de respuesta.
       // LLAMADO POR: sunat.service.js -> transport.send(), callback onResponse.
       // HACE: guarda el SOAP tal como llego y libera la compuerta. Todavia no decide aceptado o rechazado.
       // CONTINUA EN: parseSunatResponse() dentro del mismo send().
@@ -60,9 +74,9 @@ export function createSunatModel(database) {
         );
         if (!saved.length) throw new Error('No se pudo persistir la respuesta SUNAT.');
         await tx.query(
-          `UPDATE sunat_control SET disponible_desde=now()+interval '5 seconds',operacion_id=NULL
+          `UPDATE sunat_control SET disponible_desde=$2,operacion_id=NULL
            WHERE id=1 AND operacion_id=$1 RETURNING id`,
-          [id],
+          [id, addSeconds(date, 5)],
         );
       });
     },

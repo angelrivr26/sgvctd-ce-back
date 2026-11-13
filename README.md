@@ -1,10 +1,18 @@
 # Backend de comprobantes SERNANP
 
-Backend asincrono para recibir compras pagadas desde Boletos, emitir el comprobante mediante SUNAT, generar PDF/XML/CDR y devolver el resultado. Existe un solo flujo fiscal; `SUNAT_ENV=beta|production` selecciona credenciales, certificado, series y endpoint sin duplicar servicios.
+Backend asincrono de desarrollo para recibir compras pagadas desde Boletos, procesarlas contra
+SUNAT beta, generar PDF/XML/CDR y devolver el resultado. Existe un solo flujo tecnico;
+`SUNAT_ENV=beta|production` selecciona la configuracion, pero esta entrega no acredita emision
+productiva ni documentos fiscalmente validos.
 
 ## Preparacion
 
-Requiere Node.js 24 y OpenSSL para crear el certificado local de beta.
+Requiere Node.js 20.12 o superior, siempre dentro de la rama 20, y OpenSSL para crear el
+certificado local de beta. El entorno portátil del proyecto usa Node.js 20.20.2. La rama 20
+ya no recibe mantenimiento oficial; se conserva por compatibilidad con el servidor de Boletos.
+Abra una terminal nueva de VS Code antes de instalar: la configuracion del proyecto coloca el
+runtime portatil primero en `PATH`. `.npmrc` y el script `preinstall` rechazan cualquier instalacion
+que no se ejecute con Node.js 20; `package.json` no descarga ni sustituye el runtime del sistema.
 
 Antes de iniciar, el DBA debe ejecutar [sql/001_esquema.sql](sql/001_esquema.sql) en la base PostgreSQL y entregar `DATABASE_URL` con acceso al esquema `comprobantes`. El backend no crea ni modifica tablas durante el arranque.
 
@@ -38,9 +46,9 @@ Consulte [.env.example](.env.example) para todas las variables.
 
 ## Documentacion vigente
 
-- [Proceso backend y arquitectura](docs/BACKEND_Y_ARQUITECTURA.md)
-- [Integracion con Boletos](docs/INTEGRACION_BOLETOS.md)
-- Contrato generado: [OpenAPI](docs/openapi.json)
+- [Backend y arquitectura actual](BACKEND_Y_ARQUITECTURA.md)
+- [Integracion con Boletos](INTEGRACION_BOLETOS.md)
+- Contrato OpenAPI disponible con el backend iniciado: `GET /api/openapi.json`
 - Historial de decisiones: [BITACORA](BITACORA.md)
 
 ## Limites que el equipo de despliegue debe conocer
