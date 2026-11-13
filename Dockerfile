@@ -15,6 +15,6 @@ RUN npm ci --omit=dev --ignore-scripts
 COPY --chown=node:node . .
 USER node
 
-EXPOSE 3060
+EXPOSE 4005
 
 CMD ["node", "src/index.js"]
