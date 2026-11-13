@@ -5,13 +5,3 @@ services:
     restart: always
     ports:
       - "4005:4005"
-    env_file:
-      - .env
-
-  worker:
-    build: .
-    container_name: sernanp-worker
-    restart: always
-    command: ["node", "src/worker.js"]
-    env_file:
-      - .env
