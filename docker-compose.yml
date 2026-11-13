@@ -1,9 +1,17 @@
 services:
-  backend:
+  api:
     build: .
-    container_name: mi-backend-api
+    container_name: sernanp-api
+    restart: always
     ports:
       - "4005:4005"
     env_file:
       - .env
-    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: sernanp-worker
+    restart: always
+    command: ["node", "src/worker.js"]
+    env_file:
+      - .env

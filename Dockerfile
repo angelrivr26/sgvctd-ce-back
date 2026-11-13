@@ -1,18 +1,20 @@
-# 1. Usar una imagen base ligera con el entorno necesario
 FROM node:20-alpine
 
-# 2. Definir el directorio de trabajo dentro del contenedor
+# Hora de Perú para los comprobantes SUNAT
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/America/Lima /etc/localtime
+
+ENV NODE_ENV=production
 WORKDIR /app
 
-# 3. Copiar archivos de dependencias e instalarlas
+# Instalar dependencias saltando el script preinstall
 COPY package*.json ./
-RUN npm i
+RUN npm ci --omit=dev --ignore-scripts
 
-# 4. Copiar el resto del código fuente
-COPY . .
+# Copiar código y usar usuario seguro
+COPY --chown=node:node . .
+USER node
 
-# 5. Exponer el puerto en el que corre tu API
-EXPOSE 4005
+EXPOSE 3060
 
-# 6. Comando para iniciar el servidor
-CMD ["npm", "run", "dev"]
+CMD ["node", "src/index.js"]
