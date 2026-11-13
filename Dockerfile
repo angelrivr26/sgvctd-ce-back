@@ -12,7 +12,7 @@ RUN npm i
 COPY . .
 
 # 5. Exponer el puerto en el que corre tu API
-EXPOSE 3060
+EXPOSE 4005
 
 # 6. Comando para iniciar el servidor
 CMD ["npm", "run", "dev"]

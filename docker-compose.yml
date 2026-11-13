@@ -1,0 +1,9 @@
+services:
+  backend:
+    build: .
+    container_name: mi-backend-api
+    ports:
+      - "4005:4005"
+    env_file:
+      - .env
+    restart: unless-stopped
