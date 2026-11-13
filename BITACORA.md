@@ -1,5 +1,45 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-13 - Activacion operativa del correo SMTP
+
+- Alcance: se completo la configuracion privada de `backend-comprobantes` con `MAIL_MODE=smtp`,
+  reutilizando la cuenta SMTP ya administrada por Boletos sin copiar credenciales a archivos
+  versionados ni mostrarlas en consola.
+- Verificacion: la autenticacion SMTP respondio correctamente mediante `verify()`, sin enviar un
+  mensaje de prueba. El backend del puerto 4005 se reinicio de forma controlada y volvio a quedar
+  escuchando con la nueva configuracion.
+- Recuperacion: un comprobante previamente aceptado por SUNAT y recuperado con PDF/XML/CDR fue
+  reenviado una sola vez mediante el flujo auditado; la entrega termino en estado `ENVIADO`. No se
+  repitio la emision fiscal ni se procesaron otras compras desde el script de recuperacion.
+- Privacidad: no se registran en esta bitacora el destinatario, las credenciales ni identificadores
+  del comprobante. El archivo temporal de diagnostico se retiro al terminar.
+- Validacion final: 21/21 pruebas aprobadas, `npm run check` verifico 52 archivos y el backend
+  continuo escuchando en `127.0.0.1:4005` despues del reinicio.
+
+## 2026-11-13 - Preparacion SUNAT recuperable y diagnostico por etapa
+
+- Alcance: la preparacion local del envio clasifica por separado la reserva de numeracion, creacion
+  del UBL, carga del certificado/firma y persistencia del diario. Un fallo en esas etapas se registra
+  como local, recuperable y no incierto; solo un envio iniciado sin respuesta conserva la proteccion
+  de resultado incierto que impide reenviar a ciegas.
+- Motivo: las compras 57926, 57927 y la factura 57931 agotaron cinco intentos antes de crear el diario, pero el manejo
+  generico ocultaba la excepcion con `No se pudo confirmar el resultado del proveedor` y obligaba al
+  operador a solicitar un reintento manual aunque SUNAT nunca habia sido contactada.
+- Seguridad: los mensajes persistidos solo incluyen la etapa y un codigo acotado, sin rutas,
+  credenciales, SQL ni datos del comprador. Se mantiene idempotencia y no se relaja la proteccion
+  ante una respuesta fiscal realmente incierta.
+- Recuperacion controlada: despues de confirmar que la compra 57927 no tenia diario, serie,
+  respuesta ni envio previo, se repuso una sola vez a pendiente con auditoria
+  `CORRECCION_AUTOMATICA`. El worker reiniciado la proceso como `B001-40`; SUNAT beta respondio HTTP
+  200 y el comprobante termino `PROCESADO`, `ACEPTADO` y con documentos `DISPONIBLES`.
+- Verificacion de factura: se comprobo igualmente que 57931 no tenia diario, serie, numero ni llamada
+  HTTP previa. Tras cargar la correccion en el worker, se proceso en el primer intento como
+  `F001-52`; SUNAT beta respondio HTTP 200 y termino `PROCESADO`, `ACEPTADO` y con documentos
+  `DISPONIBLES`.
+- Validacion: 21/21 pruebas aprobadas, incluidas las regresiones que impiden presentar errores locales conocidos o inesperados como
+  resultado incierto; `npm run check` valido la sintaxis de 53 archivos. No se modificaron
+  dependencias ni archivos de bloqueo.
+
 ## 2026-11-12 - Envio de comprobantes por SMTP
 
 - Alcance: el correo conserva el modo local `capture` y agrega `smtp` mediante Nodemailer. El envio

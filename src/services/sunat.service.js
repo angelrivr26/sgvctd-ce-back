@@ -10,6 +10,17 @@ const maxResponse = 4_000_000;
 
 class SunatBusyError extends Error {}
 
+function localPreparationError(stage, error) {
+  if (error instanceof ProviderError) return error;
+  const code = String(error?.code || error?.name || 'ERROR_LOCAL')
+    .replace(/[^A-Za-z0-9_:-]/g, '')
+    .slice(0, 80);
+  return new ProviderError(`No se pudo ${stage} (${code}).`, {
+    uncertain: false,
+    retryable: true,
+  });
+}
+
 async function readResponse(response) {
   const chunks = [];
   let length = 0;
@@ -178,7 +189,12 @@ export function createSunatProvider(
     // LLAMADO POR: confirmEmission(), solicitarEmision() y sendPreparedRequest() despues del POST.
     // HACE: lee sunat_envios. Sin fila o en PREPARADO devuelve null. Con SOAP guardado lo interpreta.
     // CONTINUA EN: null sigue a prepareRequest(). SOAP guardado se interpreta sin usar la red.
-    const row = await model.get(id);
+    let row;
+    try {
+      row = await model.get(id);
+    } catch (error) {
+      throw localPreparationError('consultar el diario SUNAT', error);
+    }
     if (!row || row.estado === 'PREPARADO') return null;
     if (row.estado === 'ENVIO_INICIADO')
       throw new ProviderError(
@@ -229,15 +245,38 @@ export function createSunatProvider(
     // LLAMADO POR: solicitarEmision(), solo cuando consultarResultado() devolvio null.
     // HACE: si el diario ya tiene la fila, la reutiliza. Si no, numera, crea UBL, firma y guarda.
     // CONTINUA EN: sendPreparedRequest(). La red empieza recien ahi.
-    let row = await model.get(id);
+    let row;
+    try {
+      row = await model.get(id);
+    } catch (error) {
+      throw localPreparationError('releer el diario SUNAT', error);
+    }
     if (row) return row;
 
     // FASE 2/6: crear UBL, firmarla y guardarla antes de usar la red.
-    const request = createSunatRequest(payload, config, {
-      numero: await model.nextNumber(),
-    });
-    const signed = signUblXml(request.xml, await credentials());
-    return model.prepare(id, { ...request, xml: signed.xml });
+    let numero;
+    try {
+      numero = await model.nextNumber();
+    } catch (error) {
+      throw localPreparationError('reservar la numeracion SUNAT', error);
+    }
+    let request;
+    try {
+      request = createSunatRequest(payload, config, { numero });
+    } catch (error) {
+      throw localPreparationError('construir el UBL', error);
+    }
+    let signed;
+    try {
+      signed = signUblXml(request.xml, await credentials());
+    } catch (error) {
+      throw localPreparationError('cargar el certificado o firmar el UBL', error);
+    }
+    try {
+      return await model.prepare(id, { ...request, xml: signed.xml });
+    } catch (error) {
+      throw localPreparationError('guardar el diario SUNAT', error);
+    }
   }
 
   async function sendPreparedRequest(row, id) {

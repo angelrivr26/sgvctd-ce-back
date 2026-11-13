@@ -64,13 +64,16 @@ export function createProcesamientoService({ model, provider, documentos, config
       } catch (error) {
         // RUTA DE ERROR: programar reintento o atencion sin perder una emision confirmada.
         const known = error instanceof ProviderError;
+        const code = String(error?.code || error?.name || 'ERROR_LOCAL')
+          .replace(/[^A-Za-z0-9_:-]/g, '')
+          .slice(0, 80);
         await model.fail(record, {
           message: confirmed
             ? 'La emision esta confirmada. Fallo la preparacion de documentos; se recuperara sin volver a emitir.'
             : known
               ? error.message
-              : 'No se pudo confirmar el resultado del proveedor.',
-          uncertain: !confirmed && (!known || error.uncertain),
+              : `Fallo local no clasificado antes de confirmar la emision (${code}).`,
+          uncertain: !confirmed && known && error.uncertain,
           retry: (!known || error.retryable) && record.intentos < config.maxAttempts,
           delaySeconds: retryDelay(record.intentos),
         });
