@@ -1,5 +1,95 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-12 - Retiro de actualizacion manual del PDF
+
+- Alcance: se retira del detalle el boton `Actualizar formato PDF` y se elimina su flujo completo en
+  frontend y backend: campos de estado, cliente HTTP, endpoint, controlador, servicio, operacion de
+  persistencia, contrato OpenAPI y prueba exclusiva de regeneracion.
+- Motivo: simplificar el circuito durante las pruebas y dejar una sola forma de crear el PDF: la
+  generacion automatica que ocurre al procesar correctamente el comprobante.
+- Consistencia: se conserva `version_plantilla` como metadato interno de los documentos generados y
+  no se cambia el esquema de base de datos. La descarga de PDF/XML/CDR, recuperacion documental,
+  reintentos y entregas permanecen sin cambios.
+- Validacion: 17/17 pruebas del backend y `npm run check` aprobados; el build Angular de produccion
+  finaliza correctamente con bundle inicial de 317.56 kB. La busqueda de referencias confirma que
+  no quedan usos activos del boton, endpoint ni campos publicos retirados. No se modificaron
+  dependencias ni archivos de bloqueo.
+
+## 2026-11-12 - Listado ordenado por fecha de pago
+
+- Alcance: la consulta paginada de Control y seguimiento ordena los comprobantes por `fechaPago`
+  descendente; `creado_en` e `id` permanecen como criterios de desempate estable.
+- Motivo: mostrar primero las compras con pago mas reciente, independientemente del momento en que
+  hayan ingresado al backend de Comprobantes.
+- Consistencia: `fechaPago` se interpreta como `timestamptz`, respetando el offset recibido en el
+  contrato. No se modifican filtros, resumen, limites, paginacion ni datos persistidos.
+- Validacion: `npm run check` aprobo la sintaxis de 52 archivos y la presencia de la bitacora. La
+  comprobacion funcional del orden en el listado queda a cargo del usuario, segun lo solicitado. El
+  cambio no altera contratos HTTP ni dependencias.
+
+## 2026-11-12 - Cabecera institucional configurable en el PDF
+
+- Alcance: se elimina `Establecimiento del emisor` del bloque de datos del cliente en factura y
+  boleta. La razon social y direccion visibles en la cabecera se configuran con `PDF_ISSUER_NAME` y
+  `PDF_ISSUER_ADDRESS`; la direccion admite `\n` para conservar saltos de linea. El entorno local y
+  `.env.example` quedan preparados con los datos publicos indicados de SERNANP.
+- Motivo: separar los datos institucionales de presentacion de los datos ficticios usados por el
+  emisor fiscal durante las pruebas, manteniendo el encabezado ajustable sin editar las plantillas.
+- Seguridad y consistencia: los valores se escapan antes de incorporarse al HTML. La configuracion
+  solo modifica la representacion PDF; el RUC y el emisor fiscal del contrato, XML y CDR no se
+  reemplazan. La version pasa a `factura-html-v2`/`boleta-html-v2`, de modo que los PDF anteriores
+  pueden regenerarse mediante el flujo auditado existente.
+- Validacion: 17/17 pruebas aprobadas, incluido el transporte de la configuracion al renderizador,
+  la omision de la linea retirada y los saltos del domicilio. `npm run check` valida 52 archivos y
+  la carga real del `.env` reconoce la razon social y las tres lineas de direccion. Un render real
+  con Chromium produjo una boleta `boleta-html-v2` valida de 90 036 bytes con la cabecera
+  institucional y sin el campo retirado.
+- Limitaciones: es necesario reiniciar los procesos del backend para releer el `.env`; los PDF ya
+  almacenados conservan su contenido hasta que el operador use `Actualizar formato PDF`.
+
+## 2026-11-12 - Representacion PDF con plantillas HTML de factura y boleta
+
+- Alcance: el backend reemplaza el dibujo lineal del PDF por dos plantillas HTML A4 independientes,
+  `factura.html` y `boleta.html`, seleccionadas automaticamente mediante el `tipoComprobante`
+  persistido. La presentacion incorpora cabecera del emisor, comprador, forma de pago, detalle,
+  cuadro de totales, importe en letras y advertencia del ambiente. Conserva almacenamiento por
+  contenido, SHA-256, XML/CDR, recuperacion documental y `version_plantilla`. El detalle ofrece
+  `Actualizar formato PDF` solo para versiones antiguas; regenera el PDF con control optimista y
+  auditoria, sin modificar ni reenviar XML/CDR.
+- Motivo: aproximar la representacion impresa al formato institucional solicitado sin trasladar al
+  frontend la autoridad sobre el documento ni permitir que el operador contradiga el XML emitido.
+  Los datos fiscales y del comprador provienen del snapshot; solo la razon social y direccion
+  visibles en la cabecera admiten configuracion de presentacion en el backend.
+- Seguridad y operacion: Chrome, Chromium o Edge se invoca en modo headless con JavaScript y
+  resolucion de red deshabilitados, perfil temporal por render y timeout configurable. Se documentan
+  `PDF_BROWSER_PATH`, `PDF_RENDER_TIMEOUT_MS` y el uso excepcional de
+  `PDF_BROWSER_NO_SANDBOX`. La alternativa inicial con `puppeteer-core` se retiro despues de la
+  auditoria; el lockfile final no la contiene.
+- Validacion: 17/17 pruebas del backend, `npm run check` y build Angular de produccion aprobados. El
+  render real con Chrome genero
+  una boleta A4 de una pagina (88 055 bytes) y una compra de 80 lineas en cuatro paginas (118 567
+  bytes), ambas cargadas nuevamente como PDF valido. `npm audit --audit-level=low` queda en cero
+  vulnerabilidades despues de retirar `puppeteer-core`. La revision visual local confirma la
+  estructura del formato de referencia. `npm run format:check` mantiene tres observaciones
+  preexistentes en esta bitacora y en dos HTML del frontend ajenos al cambio.
+- Limitaciones: los PDF ya almacenados no se reescriben automaticamente; el operador puede actualizar
+  cada representacion desfasada desde el detalle. El servidor debe disponer de un navegador Chromium
+  compatible. La boleta conserva una plantilla propia y similar a la factura hasta recibir el diseno
+  institucional definitivo.
+
+## 2026-11-12 - Formato visual de montos en soles
+
+- Alcance: la consulta y el detalle del frontend presentan todos los importes visibles como
+  `S/ 12.00`, con simbolo a la izquierda, punto decimal y dos decimales. Se conserva `PEN` como
+  moneda y solo se fija `en-US` como patron numerico del `CurrencyPipe` para esta representacion.
+- Motivo: alinear visualmente los montos con el formato solicitado para la pagina operada en Lima,
+  Peru, evitando la salida anterior `12,00 S/`.
+- Validacion: `npm run build` de produccion aprobado con bundle inicial de 317.56 kB. La comprobacion
+  directa del formateador Angular devuelve `S/ 12.00` y `S/ 1,234.50`. No se modifican importes,
+  calculos, modelos, contratos HTTP, payloads ni persistencia del backend.
+- Limitaciones: el ajuste se aplica a la interfaz de `frontend-comprobantes`; los documentos PDF,
+  XML y CDR mantienen su representacion propia.
+
 ## 2026-11-12 - Fechas operativas generadas por el backend
 
 - Alcance: las nuevas recepciones, auditorias, sesiones, reservas, reintentos, entregas y registros
@@ -404,6 +494,7 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 
 - Proveedor, XML y CDR simulados; no se incorporan certificados, firma, QR fiscal ni envios reales. Plantilla JavaScript sobre pdf-lib; el motor puede sustituirse por HTML/CSS mediante su contrato.
 - Sigue pendiente el dimensionamiento productivo con PostgreSQL, reglas contables y modalidad SUNAT/PSE.
+
 # Cambio: exclusión de archivos locales de Git
 
 - **Alcance:** se declaran `.local/` y `.tools/` como directorios locales ignorados por Git.
@@ -438,4 +529,3 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** alinear el runtime del backend con el requisito solicitado sin cambiar funcionalidades ni frontend.
 - **Validación:** revisión del cambio de configuración; no fue posible leer el lockfile ni ejecutar npm en esta sesión porque la herramienta de terminal falló al iniciar.
 - **Limitaciones:** las dependencias y el arranque aún deben validarse bajo Node.js 20. Esta rama de Node está fuera de mantenimiento oficial desde el 24 de marzo de 2026.
-

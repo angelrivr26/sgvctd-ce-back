@@ -22,10 +22,13 @@ import { createWorker } from './workers/procesamiento.worker.js';
  *
  * Este archivo solo compone dependencias. Ningun servicio abre su propia conexion de BD.
  */
-export function createApplication(database, config, { provider, sunat = {} } = {}) {
+export function createApplication(database, config, { provider, sunat = {}, pdfRenderer } = {}) {
   const model = createComprobanteModel(database);
   const deliveryModel = createEntregaModel(database);
-  const documentos = createDocumentosService(config.documentDirectory);
+  const documentos = createDocumentosService(config.documentDirectory, {
+    pdfConfig: config.pdf,
+    pdfRenderer,
+  });
   const fiscalProvider = provider ?? createSunatProvider(database, config.sunat, sunat);
   const comprobantes = createComprobanteService(model, documentos);
   const procesamiento = createProcesamientoService({

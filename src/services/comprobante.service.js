@@ -15,7 +15,6 @@ export function presentComprobante(record) {
     estado: record.estado,
     estadoFiscal: record.estado_fiscal,
     estadoDocumentos: record.estado_documentos,
-    versionPlantilla: record.version_plantilla,
     fechaEmision: record.resultado_emision?.fechaEmision ?? null,
     respuestaSunat: record.resultado_emision?.respuestaSunat ?? null,
     serie: record.serie,

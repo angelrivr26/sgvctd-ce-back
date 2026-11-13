@@ -123,7 +123,8 @@ export function createComprobanteModel(database) {
       const rows = await database.query(
         `SELECT c.*,
         (SELECT e.estado FROM entregas e WHERE e.comprobante_id=c.id AND e.tipo='CORREO' ORDER BY e.creado_en DESC,e.id DESC LIMIT 1) AS estado_correo
-        FROM comprobantes c ${where} ORDER BY creado_en DESC,id DESC
+        FROM comprobantes c ${where}
+        ORDER BY (c.payload->>'fechaPago')::timestamptz DESC,c.creado_en DESC,c.id DESC
         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, filters.limite, (filters.pagina - 1) * filters.limite],
       );

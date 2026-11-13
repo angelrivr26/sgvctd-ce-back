@@ -16,6 +16,12 @@ export function loadConfig(overrides = {}) {
       throw new Error(`Configuracion invalida: ${name}`);
     return value;
   };
+  const boolean = (name, fallback = false) => {
+    const value = env[name];
+    if (value === undefined || value === '') return fallback;
+    if (!['true', 'false'].includes(value)) throw new Error(`Configuracion invalida: ${name}`);
+    return value === 'true';
+  };
   const config = {
     environment: env.NODE_ENV || 'development',
     host: env.HOST || '127.0.0.1',
@@ -33,6 +39,13 @@ export function loadConfig(overrides = {}) {
     documentDirectory: resolve(env.DOCUMENT_DIRECTORY || '.local/documentos'),
     mailDirectory: resolve(env.MAIL_DIRECTORY || '.local/correos'),
     callbackDirectory: resolve(env.CALLBACK_DIRECTORY || '.local/notificaciones'),
+    pdf: Object.freeze({
+      browserPath: env.PDF_BROWSER_PATH ? resolve(env.PDF_BROWSER_PATH) : '',
+      timeoutMs: integer('PDF_RENDER_TIMEOUT_MS', 30000, 5000, 120000),
+      noSandbox: boolean('PDF_BROWSER_NO_SANDBOX'),
+      issuerName: env.PDF_ISSUER_NAME?.trim() || '',
+      issuerAddress: env.PDF_ISSUER_ADDRESS?.trim() || '',
+    }),
     sunat: parseSunatConfig(env),
     integrationKey: env.INTEGRATION_API_KEY || '',
     adminUsername: env.ADMIN_USERNAME || 'contador',

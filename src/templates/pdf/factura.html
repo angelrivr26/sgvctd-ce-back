@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{DOCUMENT_TITLE}} {{DOCUMENT_REFERENCE}}</title>
+    <style>
+      {{STYLES}}
+    </style>
+  </head>
+  <body>
+    <main class="document">
+      <header class="document-header">
+        <section class="issuer">
+          <strong class="issuer-brand">{{ISSUER_BRAND}}</strong>
+          <strong class="issuer-name">{{ISSUER_NAME}}</strong>
+          <span>{{ISSUER_ADDRESS}}</span>
+        </section>
+        <section class="document-box" aria-label="Identificación del comprobante">
+          <strong>{{DOCUMENT_TITLE}}</strong>
+          <strong>RUC: {{ISSUER_RUC}}</strong>
+          <strong>{{DOCUMENT_REFERENCE}}</strong>
+        </section>
+      </header>
+
+      <section class="customer-data">
+        <dl>
+          <div>
+            <dt>Fecha de emisión</dt>
+            <dd>{{ISSUE_DATE}}</dd>
+          </div>
+          <div>
+            <dt>Señor(es)</dt>
+            <dd>{{CUSTOMER_NAME}}</dd>
+          </div>
+          <div>
+            <dt>{{CUSTOMER_DOCUMENT_LABEL}}</dt>
+            <dd>{{CUSTOMER_DOCUMENT}}</dd>
+          </div>
+          <div>
+            <dt>Dirección del cliente</dt>
+            <dd>{{CUSTOMER_ADDRESS}}</dd>
+          </div>
+          <div>
+            <dt>Tipo de moneda</dt>
+            <dd>{{CURRENCY_NAME}}</dd>
+          </div>
+          <div>
+            <dt>Observación</dt>
+            <dd>{{OBSERVATION}}</dd>
+          </div>
+        </dl>
+        <p class="payment">Forma de pago: <strong>{{PAYMENT_METHOD}}</strong></p>
+      </section>
+
+      <table class="items">
+        <thead>
+          <tr>
+            <th class="number">Cantidad</th>
+            <th class="unit">Unidad medida</th>
+            <th>Descripción</th>
+            <th class="money">Valor unitario</th>
+            <th class="money">ICBPER</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ITEM_ROWS}}
+        </tbody>
+      </table>
+
+      <section class="summary">
+        <div class="free-operations">
+          <span>Valor de venta de<br />operaciones gratuitas</span
+          ><strong>S/ {{FREE_OPERATIONS}}</strong>
+        </div>
+        <table class="totals">
+          <tbody>
+            <tr>
+              <th>Sub total ventas</th>
+              <td>S/ {{SUBTOTAL_SALES}}</td>
+            </tr>
+            <tr>
+              <th>Anticipos</th>
+              <td>S/ {{ADVANCES}}</td>
+            </tr>
+            <tr>
+              <th>Descuentos</th>
+              <td>S/ {{DISCOUNTS}}</td>
+            </tr>
+            <tr>
+              <th>Valor venta</th>
+              <td>S/ {{SALE_VALUE}}</td>
+            </tr>
+            <tr>
+              <th>ISC</th>
+              <td>S/ {{ISC}}</td>
+            </tr>
+            <tr>
+              <th>IGV</th>
+              <td>S/ {{IGV}}</td>
+            </tr>
+            <tr>
+              <th>ICBPER</th>
+              <td>S/ {{ICBPER}}</td>
+            </tr>
+            <tr>
+              <th>Otros cargos</th>
+              <td>S/ {{OTHER_CHARGES}}</td>
+            </tr>
+            <tr>
+              <th>Otros tributos</th>
+              <td>S/ {{OTHER_TAXES}}</td>
+            </tr>
+            <tr>
+              <th>Monto de redondeo</th>
+              <td>S/ {{ROUNDING}}</td>
+            </tr>
+            <tr class="total">
+              <th>Importe total</th>
+              <td>S/ {{TOTAL}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <p class="amount-words"><strong>SON:</strong> {{AMOUNT_IN_WORDS}}</p>
+      <footer>{{FOOTER}}</footer>
+    </main>
+  </body>
+</html>
