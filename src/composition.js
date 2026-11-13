@@ -17,7 +17,7 @@ import { createWorker } from './workers/procesamiento.worker.js';
  * 2. Envio: el worker reserva, crea y firma el UBL, lo registra y llama sendBill.
  * 3. Respuesta: guarda SOAP/CDR y confirma aceptacion, rechazo o resultado incierto.
  * 4. Documentos: genera PDF y conserva PDF/XML/CDR con verificacion de integridad.
- * 5. Correo: captura localmente el trabajo de prueba, de forma independiente.
+ * 5. Correo: captura localmente o envia por SMTP, de forma independiente.
  * 6. Boletos: notifica el resultado mediante callback idempotente.
  *
  * Este archivo solo compone dependencias. Ningun servicio abre su propia conexion de BD.
@@ -37,7 +37,11 @@ export function createApplication(database, config, { provider, sunat = {}, pdfR
     documentos,
     config,
   });
-  const correo = createCorreoService(config.mailDirectory);
+  const correo = createCorreoService({
+    mode: config.mailMode ?? 'capture',
+    directory: config.mailDirectory,
+    smtp: config.smtp,
+  });
   const integracion = createIntegracionBoletosService(config);
   const entregas = createEntregaService({
     model: deliveryModel,

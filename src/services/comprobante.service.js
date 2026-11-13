@@ -64,6 +64,19 @@ export function createComprobanteService(model, documentos) {
         historial: result.history,
       };
     },
+    async deliveryDetail(id) {
+      const result = await model.detail(id);
+      const comprobante = presentComprobante(result.record);
+      const attachments = await Promise.all(
+        result.documents
+          .filter((document) => ['PDF', 'XML'].includes(document.tipo))
+          .map(async (document) => ({
+            tipo: document.tipo,
+            contenido: await documentos.read(document),
+          })),
+      );
+      return { ...comprobante, documentos: attachments };
+    },
     async retry(id, actor) {
       return presentComprobante(await model.retry(id, actor));
     },

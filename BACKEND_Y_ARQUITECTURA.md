@@ -21,7 +21,7 @@ capas internas del mismo flujo, no procesos de negocio adicionales.
 |    2 | `procesamiento.worker.js` y `sunat.service.js`  | Reserva el trabajo, crea y firma el UBL, registra la solicitud y ejecuta `sendBill`. |
 |    3 | `sunat.service.js` y `procesamiento.service.js` | Persiste SOAP/CDR y determina aceptacion, rechazo o resultado incierto.              |
 |    4 | `documentos.service.js`                         | Genera PDF y conserva PDF, XML y CDR con hash SHA-256.                               |
-|    5 | `correo.service.js`                             | Captura un correo de prueba como JSON local; no usa SMTP.                            |
+|    5 | `correo.service.js`                             | Captura un correo de prueba o envia PDF/XML mediante SMTP.                           |
 |    6 | `integracion-boletos.service.js`                | Envia un callback idempotente a Boletos o lo captura localmente.                     |
 
 El `202` solo confirma que la solicitud fue validada y almacenada. No significa que SUNAT la haya
@@ -41,7 +41,7 @@ datos.
 | `src/services/documentos.service.js`          | PDF/XML/CDR, almacenamiento e integridad.                     |
 | `src/services/html-pdf.service.js`            | Render aislado de HTML a PDF mediante Chromium.               |
 | `src/templates/pdf`                           | HTML de factura/boleta y estilos A4 compartidos.              |
-| `src/services/correo.service.js`              | Captura local del correo de prueba.                           |
+| `src/services/correo.service.js`              | Captura local o envio SMTP del comprobante.                   |
 | `src/services/integracion-boletos.service.js` | Callback HTTP o captura local para Boletos.                   |
 | `src/services/entrega.service.js`             | Reintentos independientes de correo y callback.               |
 | `src/workers`                                 | Reservas con vencimiento y procesamiento asincrono.           |
@@ -124,7 +124,8 @@ solo corresponde a contenedores que ya proporcionen un aislamiento equivalente.
 
 ## Limitaciones actuales
 
-- El correo se captura como JSON en `MAIL_DIRECTORY`; todavia no existe SMTP.
+- `MAIL_MODE=capture` guarda JSON en `MAIL_DIRECTORY`; `MAIL_MODE=smtp` envia PDF/XML con la
+  configuracion `SMTP_*`.
 - Sin `BOLETOS_CALLBACK_URL`, el callback se captura en `CALLBACK_DIRECTORY`.
 - El almacenamiento es local y debe sustituirse si se usan varias instancias.
 - La conexion comprobada corresponde al ambiente beta; no se ha validado una emision productiva.

@@ -6,7 +6,10 @@ export function createEntregaService({ model, comprobantes, correo, integracion,
       // HACE: carga el comprobante y elige un solo destino: CORREO o BOLETOS.
       // CONTINUA EN: correo.service.js -> send() o integracion-boletos.service.js -> notify().
       try {
-        const detail = await comprobantes.detail(job.comprobante_id);
+        const detail =
+          job.tipo === 'CORREO'
+            ? await comprobantes.deliveryDetail(job.comprobante_id)
+            : await comprobantes.detail(job.comprobante_id);
         const state =
           job.tipo === 'CORREO'
             ? await correo.send(job, detail)

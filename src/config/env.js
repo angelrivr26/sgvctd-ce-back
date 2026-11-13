@@ -22,6 +22,26 @@ export function loadConfig(overrides = {}) {
     if (!['true', 'false'].includes(value)) throw new Error(`Configuracion invalida: ${name}`);
     return value === 'true';
   };
+  const mailMode = env.MAIL_MODE || 'capture';
+  if (!['capture', 'smtp'].includes(mailMode)) throw new Error('Configuracion invalida: MAIL_MODE');
+  const smtp = Object.freeze({
+    host: env.SMTP_HOST?.trim() || '',
+    port: integer('SMTP_PORT', 587, 1, 65535),
+    secure: boolean('SMTP_SECURE'),
+    user: env.SMTP_USER?.trim() || '',
+    pass: env.SMTP_PASS || '',
+    from: env.SMTP_FROM?.trim() || '',
+  });
+  if (mailMode === 'smtp') {
+    for (const [name, value] of [
+      ['SMTP_HOST', smtp.host],
+      ['SMTP_USER', smtp.user],
+      ['SMTP_PASS', smtp.pass],
+      ['SMTP_FROM', smtp.from],
+    ]) {
+      if (!value) throw new Error(`Falta ${name} para MAIL_MODE=smtp.`);
+    }
+  }
   const config = {
     environment: env.NODE_ENV || 'development',
     host: env.HOST || '127.0.0.1',
@@ -37,7 +57,9 @@ export function loadConfig(overrides = {}) {
     databaseLockTimeoutMs: integer('DB_LOCK_TIMEOUT_MS', 5000, 1000, 60000),
     dataDirectory: resolve(env.DATA_DIRECTORY || '.local/data'),
     documentDirectory: resolve(env.DOCUMENT_DIRECTORY || '.local/documentos'),
+    mailMode,
     mailDirectory: resolve(env.MAIL_DIRECTORY || '.local/correos'),
+    smtp,
     callbackDirectory: resolve(env.CALLBACK_DIRECTORY || '.local/notificaciones'),
     pdf: Object.freeze({
       browserPath: env.PDF_BROWSER_PATH ? resolve(env.PDF_BROWSER_PATH) : '',

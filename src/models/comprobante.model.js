@@ -134,7 +134,7 @@ export function createComprobanteModel(database) {
       const record = await get(id);
       const [documents, deliveries, history] = await Promise.all([
         database.query(
-          'SELECT id,tipo,sha256,bytes FROM documentos WHERE comprobante_id=$1 ORDER BY tipo',
+          'SELECT id,tipo,clave,sha256,bytes FROM documentos WHERE comprobante_id=$1 ORDER BY tipo',
           [id],
         ),
         database.query(

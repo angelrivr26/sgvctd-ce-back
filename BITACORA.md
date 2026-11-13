@@ -1,5 +1,21 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-12 - Envio de comprobantes por SMTP
+
+- Alcance: el correo conserva el modo local `capture` y agrega `smtp` mediante Nodemailer. El envio
+  usa el destinatario congelado en la compra y adjunta las copias verificadas del PDF y XML despues
+  de que el comprobante y sus documentos quedaron procesados.
+- Motivo: entregar el comprobante al comprador al finalizar correctamente la validacion fiscal, sin
+  acoplar SMTP a la transaccion, a SUNAT ni al callback de Boletos.
+- Configuracion: se agregan `MAIL_MODE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
+  `SMTP_PASS` y `SMTP_FROM`. `capture` permanece como valor predeterminado y no abre conexiones.
+- Consistencia: un rechazo fiscal no crea correo; un fallo SMTP usa los reintentos existentes y no
+  modifica ni reemite el comprobante. El CDR permanece disponible como documento tecnico, pero no
+  se adjunta al correo dirigido al comprador.
+- Validacion: 19/19 pruebas aprobadas, incluidos configuracion incompleta, captura local, SMTP
+  simulado, adjuntos y circuito fiscal; `npm run check` verifico 52 archivos y la auditoria reporto
+  cero vulnerabilidades conocidas. No se realizo ningun envio SMTP real.
+
 ## 2026-11-12 - Retiro de actualizacion manual del PDF
 
 - Alcance: se retira del detalle el boton `Actualizar formato PDF` y se elimina su flujo completo en
