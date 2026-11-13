@@ -9,10 +9,11 @@ WORKDIR /app
 
 # Instalar dependencias saltando el script preinstall
 COPY package*.json ./
-RUN npm install
+RUN npm install --ignore-scripts
 
 # Copiar código y usar usuario seguro
 COPY --chown=node:node . .
+RUN chown -R node:node /app
 USER node
 
 EXPOSE 4005
