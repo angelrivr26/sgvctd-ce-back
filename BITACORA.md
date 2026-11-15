@@ -1,5 +1,30 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-15 - Generacion PDF nativa con jsPDF
+
+- Alcance: se reemplazo el proceso HTML/Chromium por un render A4 nativo con `jsPDF` 4.2.1. El
+  documento conserva cabecera, comprador, detalle y referencias de boletos, forma de pago, totales,
+  importe en letras, advertencia de ambiente, metadatos deterministas y paginacion. La version
+  interna pasa a `factura-jspdf-v1`/`boleta-jspdf-v1`.
+- Motivo: eliminar la dependencia operativa de Chrome/Chromium dentro del contenedor. El nuevo motor
+  funciona directamente en Node.js, sin DOM, ejecutables externos, perfiles temporales, JavaScript
+  de navegador ni llamadas de red.
+- Configuracion: `DOCUMENT_DIRECTORY=./documentos` en `.env`, `.env.example` y el valor por defecto;
+  se resuelve dentro del directorio de ejecucion (`/app/documentos` en Docker). `documentos/` queda
+  ignorado por Git. Se retiraron las variables `PDF_BROWSER_*` y `PDF_RENDER_TIMEOUT_MS` que ya no
+  tienen efecto.
+- Consistencia: no cambiaron recepcion, contrato HTTP, confirmacion SUNAT, XML/CDR, idempotencia,
+  reservas, reintentos, correo ni callback. Una emision ya confirmada puede recuperar documentos sin
+  volver a emitir. Las plantillas HTML historicas permanecen solo para compatibilidad interna.
+- Dependencias: se agrego `jspdf` 4.2.1 y se retiro `pdf-lib`, su unico consumidor anterior. Se
+  conservo `package-lock.json`; `npm audit --audit-level=low` reporto cero vulnerabilidades.
+- Validacion: 24/24 pruebas aprobadas, incluida generacion real sin navegador, igualdad binaria entre
+  renders repetidos y detalle multipagina. `npm run check` verifico 54 archivos; los archivos
+  modificados cumplen Prettier. Una prueba aislada con el `.env` genero PDF/XML/CDR ficticios en
+  `./documentos`, con PDF `boleta-jspdf-v1` valido de una pagina, sin conectar BD ni SUNAT.
+- Limitaciones: la carpeta dentro del contenedor no sobrevive a su recreacion si el despliegue no
+  monta un volumen. Este cambio no reprograma automaticamente trabajos que ya agotaron intentos.
+
 ## 2026-11-15 - Diagnostico de preparacion documental en Docker
 
 - Alcance: se agregaron logs JSON por etapa desde la reserva documental hasta el cierre en base de

@@ -130,7 +130,9 @@ export function amountInWords(value) {
   return `${apocopate(integerInWords(integer))} Y ${fraction}/100 SOLES`;
 }
 
-export const pdfTemplateVersion = (type) => `${type === 'FACTURA' ? 'factura' : 'boleta'}-html-v2`;
+const htmlTemplateVersion = (type) => `${type === 'FACTURA' ? 'factura' : 'boleta'}-html-v2`;
+
+export const pdfTemplateVersion = (type) => `${type === 'FACTURA' ? 'factura' : 'boleta'}-jspdf-v1`;
 
 const formatDate = (value) =>
   new Intl.DateTimeFormat('es-PE', {
@@ -198,6 +200,87 @@ const presentationText = (value, fallback) => {
 
 const multilineHtml = (value) => escapeHtml(value).replaceAll('\n', '<br>');
 
+const footerText = (beta) =>
+  beta
+    ? 'Esta es una representacion impresa del comprobante electronico, generada en el ambiente de pruebas SUNAT. Documento sin validez tributaria.'
+    : 'Esta es una representacion impresa del comprobante electronico. Puede verificarla utilizando los servicios de SUNAT.';
+
+function presentationData(record, presentation) {
+  const data = record.payload;
+  const result = record.resultado_emision;
+  const type = data.tipoComprobante;
+  const summary = totals(data);
+  const issuerName = presentationText(presentation.issuerName, data.emisor.razonSocial);
+  const issuerAddress = presentationText(presentation.issuerAddress, data.emisor.direccion);
+  return {
+    data,
+    result,
+    type,
+    summary,
+    issuerName,
+    issuerAddress,
+    brand: issuerName.toUpperCase().includes('SERNANP') ? 'SERNANP' : issuerName,
+    beta: result.respuestaSunat.ambiente === 'beta',
+    title: type === 'FACTURA' ? 'FACTURA ELECTRÓNICA' : 'BOLETA DE VENTA ELECTRÓNICA',
+  };
+}
+
+/** Snapshot de presentacion consumido por jsPDF; no abre archivos, red ni navegador. */
+export function renderComprobantePdf(record, presentation = {}) {
+  const { data, result, type, summary, issuerName, issuerAddress, brand, beta, title } =
+    presentationData(record, presentation);
+  const valueSale = summary.gross - summary.discounts;
+  return {
+    version: pdfTemplateVersion(type),
+    title,
+    reference: `${result.serie}-${result.numero}`,
+    issuer: issuerName,
+    issuedAt: result.fechaEmision,
+    content: {
+      issuer: {
+        brand,
+        name: issuerName,
+        ruc: data.emisor.ruc,
+        address: issuerAddress,
+      },
+      issueDate: formatDate(result.fechaEmision),
+      customer: {
+        name: data.comprador.nombre,
+        documentLabel: data.comprador.tipoDocumento,
+        document: data.comprador.numeroDocumento,
+        address: data.comprador.direccion || 'NO INFORMADA',
+      },
+      paymentMethod: 'CONTADO',
+      currencyName: 'SOLES',
+      observation: `FORMA DE PAGO/CONTADO\nCOMPRA ${data.compraId} - ${data.modalidad}`,
+      items: data.detalle.map((item) => ({
+        quantity: item.cantidad.toFixed(2),
+        unit: 'UNIDAD',
+        description: item.descripcion,
+        references: item.boletoIds,
+        unitValue: money(item.precioUnitario),
+        icbper: '0.00',
+      })),
+      freeOperations: money(summary.free),
+      totals: [
+        ['Sub total ventas', money(summary.gross + summary.tax)],
+        ['Anticipos', '0.00'],
+        ['Descuentos', money(summary.discounts)],
+        ['Valor venta', money(valueSale)],
+        ['ISC', '0.00'],
+        ['IGV', money(summary.tax)],
+        ['ICBPER', '0.00'],
+        ['Otros cargos', '0.00'],
+        ['Otros tributos', '0.00'],
+        ['Monto de redondeo', '0.00'],
+        ['Importe total', money(data.total)],
+      ],
+      amountInWords: amountInWords(data.total),
+      footer: footerText(beta),
+    },
+  };
+}
+
 /** Arma el HTML desde el snapshot persistido y la presentacion explicita; no consulta la red. */
 export async function renderComprobanteHtml(record, presentation = {}) {
   const data = record.payload;
@@ -209,7 +292,7 @@ export async function renderComprobanteHtml(record, presentation = {}) {
   ]);
   const summary = totals(data);
   const beta = result.respuestaSunat.ambiente === 'beta';
-  const version = pdfTemplateVersion(type);
+  const version = htmlTemplateVersion(type);
   const issuerName = presentationText(presentation.issuerName, data.emisor.razonSocial);
   const issuerAddress = presentationText(presentation.issuerAddress, data.emisor.direccion);
   const brand = issuerName.toUpperCase().includes('SERNANP') ? 'SERNANP' : issuerName;

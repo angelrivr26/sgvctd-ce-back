@@ -4,17 +4,17 @@ import { resolve, relative, isAbsolute, dirname } from 'node:path';
 import { digest } from '../utils/security.js';
 import { AppError } from '../utils/errors.js';
 import { validateEmissionResult } from '../validators/resultado-emision.validator.js';
-import { renderComprobanteHtml } from '../templates/comprobante.js';
-import { createHtmlPdfRenderer } from './html-pdf.service.js';
+import { renderComprobantePdf } from '../templates/comprobante.js';
+import { createJsPdfRenderer } from './jspdf.service.js';
 import { diagnosticError, diagnosticLog } from '../utils/diagnostic-log.js';
 
 /** Genera, guarda y verifica PDF/XML/CDR despues de confirmar la emision. */
 export function createDocumentosService(
   directory,
-  { pdfConfig = {}, htmlRenderer = renderComprobanteHtml, pdfRenderer, logger = console } = {},
+  { pdfConfig = {}, viewRenderer = renderComprobantePdf, pdfRenderer, logger = console } = {},
 ) {
   const root = resolve(directory);
-  const renderPdf = pdfRenderer ?? createHtmlPdfRenderer(pdfConfig, logger);
+  const renderPdf = pdfRenderer ?? createJsPdfRenderer(pdfConfig, logger);
   diagnosticLog(logger, 'info', 'documentos.almacenamiento_configurado', {
     directorioConfigurado: directory,
     directorioResuelto: root,
@@ -25,12 +25,12 @@ export function createDocumentosService(
     let stage = 'validar_emision';
     try {
       validateEmissionResult(record.resultado_emision, record.id);
-      stage = 'renderizar_html';
-      const view = await htmlRenderer(record, {
+      stage = 'preparar_vista_pdf';
+      const view = await viewRenderer(record, {
         issuerName: pdfConfig.issuerName,
         issuerAddress: pdfConfig.issuerAddress,
       });
-      diagnosticLog(logger, 'info', 'documentos.html_preparado', {
+      diagnosticLog(logger, 'info', 'documentos.vista_pdf_preparada', {
         comprobanteId: record.id,
         versionPlantilla: view.version,
       });

@@ -3,6 +3,7 @@ node_modules/
 .tools/
 coverage/
 tests/
+documentos/
 *.log
 # Copia generada bajo demanda con `npm run docs:api`.
 docs/openapi.json

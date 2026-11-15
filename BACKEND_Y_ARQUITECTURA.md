@@ -39,8 +39,8 @@ datos.
 | `src/services/sunat-documento.service.js`     | UBL 2.1, certificado y firma XML.                             |
 | `src/services/procesamiento.service.js`       | Coordinacion de emision y documentos.                         |
 | `src/services/documentos.service.js`          | PDF/XML/CDR, almacenamiento e integridad.                     |
-| `src/services/html-pdf.service.js`            | Render aislado de HTML a PDF mediante Chromium.               |
-| `src/templates/pdf`                           | HTML de factura/boleta y estilos A4 compartidos.              |
+| `src/services/jspdf.service.js`               | Render A4 nativo con jsPDF, sin navegador.                    |
+| `src/templates/pdf`                           | Plantillas HTML historicas conservadas para compatibilidad.   |
 | `src/services/correo.service.js`              | Captura local o envio SMTP del comprobante.                   |
 | `src/services/integracion-boletos.service.js` | Callback HTTP o captura local para Boletos.                   |
 | `src/services/entrega.service.js`             | Reintentos independientes de correo y callback.               |
@@ -94,22 +94,18 @@ iniciar; `verifyDatabaseSchema()` solo verifica que el esquema este completo.
 | `sesiones`      | Acceso del panel humano.                              |
 
 `DB_DRIVER=pglite` se reserva para desarrollo y pruebas internas. El despliegue compartido debe usar
-PostgreSQL con un esquema propio de Comprobantes. Los documentos, correos capturados y callbacks
-capturados se guardan en `.local` de manera predeterminada y no se versionan.
+PostgreSQL con un esquema propio de Comprobantes. Los documentos se guardan en `./documentos`; los
+correos y callbacks capturados permanecen en `.local`. Ninguno de esos archivos se versiona.
 
 ## Representacion PDF
 
-El tipo fiscal persistido selecciona automaticamente `factura.html` o `boleta.html`; el panel no
-puede cambiar el formato de una emision ya confirmada. Ambas plantillas consumen el snapshot de la
-compra y el resultado de emision para los datos fiscales. Solo la razon social y direccion visibles
-en la cabecera pueden configurarse mediante `PDF_ISSUER_NAME` y `PDF_ISSUER_ADDRESS`; son datos de
-presentacion y no reemplazan al emisor del XML/CDR. La direccion admite `\n` entre lineas. Chromium
-se ejecuta localmente con JavaScript y resolucion de red deshabilitados, usando un perfil temporal
-aislado; `pdf-lib` normaliza los metadatos con la fecha de emision.
-
-En Windows se detectan instalaciones habituales de Edge o Chrome. En servidores debe configurarse
-`PDF_BROWSER_PATH` con la ruta absoluta de Chrome, Chromium o Edge. `PDF_BROWSER_NO_SANDBOX=true`
-solo corresponde a contenedores que ya proporcionen un aislamiento equivalente.
+El tipo fiscal persistido selecciona automaticamente la presentacion de factura o boleta; el panel
+no puede cambiar el formato de una emision ya confirmada. jsPDF dibuja el A4 directamente desde el
+snapshot de compra y el resultado de emision, sin HTML, navegador, archivos temporales ni llamadas
+de red. Solo la razon social y direccion visibles en la cabecera pueden configurarse mediante
+`PDF_ISSUER_NAME` y `PDF_ISSUER_ADDRESS`; son datos de presentacion y no reemplazan al emisor del
+XML/CDR. La direccion admite `\n` entre lineas. La fecha de emision fija los metadatos del PDF y la
+plantilla conserva paginacion, detalle, totales e importe en letras.
 
 ## Seguridad y operacion
 
