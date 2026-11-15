@@ -1,5 +1,45 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-14 - Credenciales y callback alineados con Boletos
+
+- Configuracion: `INTEGRATION_API_KEY` y `COMPROBANTES_API_KEY` coinciden; asimismo,
+  `BOLETOS_CALLBACK_KEY` coincide con `COMPROBANTES_CALLBACK_KEY`. Los valores no se registran en la
+  bitacora ni en la salida de validacion.
+- Retorno: `BOLETOS_CALLBACK_URL` apunta al endpoint versionado de desarrollo de TuTicket. El router
+  receptor se adelanta a los middlewares JWT heredados para que use exclusivamente su `X-API-Key`.
+- Pruebas: aprobaron 17 de 17 casos de integracion entre proyectos y 21 de 21 pruebas de
+  `backend-comprobantes`; `npm run check` verifico 52 archivos. Las pruebas usan PGlite, proveedor
+  fiscal controlado, PDF de prueba y correo capturado; no contactan SUNAT, SMTP ni compras reales.
+- Despliegue: los cambios de entorno requieren reconstruir o reiniciar los dos backends. Los
+  registros que ya agotaron intentos se recuperan solo despues de verificar la nueva version y
+  mediante una reprogramacion controlada que no repita emision fiscal.
+- Contenedor beta: la primera compra recibida despues de habilitar la integracion demostro que la
+  imagen Alpine no tenia OpenSSL y agoto la preparacion local antes de contactar SUNAT. El Dockerfile
+  instala `openssl` junto con `tzdata`, permitiendo crear el certificado autofirmado exclusivo de
+  beta cuando no se proporcionan rutas institucionales. Produccion mantiene la exigencia de
+  certificado y clave privada configurados.
+
+## 2026-11-14 - Lectura directa de la integracion desde .env
+
+- Alcance: se retiro `backend-externo/src/config/integracion-comprobantes.config.js` y la
+  configuracion del job se concentra en `integracion-comprobantes.service.js`, que toma directamente
+  `DB_SCHEMA` y las variables `COMPROBANTES_*` cargadas en `process.env`.
+- Motivo: permitir que el despliegue use sin restricciones el origen interno definido en
+  `COMPROBANTES_API_URL`, incluido `http://10.10.14.130:4005`, y evitar duplicar en codigo las
+  garantias operativas administradas en `.env`.
+- Contrato: los valores numericos solo se convierten con `Number` para que temporizadores, lotes y
+  concurrencia conserven los tipos esperados. `COMPROBANTES_ENABLED` sigue siendo el interruptor
+  explicito del job; no se aplican validaciones de URL, claves, fecha, emisor o afectacion al cargar
+  la configuracion.
+- Documentacion y pruebas: se actualizo la guia de integracion y la prueba ahora verifica que una URL
+  HTTP interna y los demas valores se copian directamente desde el entorno. La sintaxis de los dos
+  archivos JavaScript modificados es valida; 15 de 16 pruebas de integracion aprobaron, incluida la
+  prueba de 2000 compras ficticias.
+- Limitacion conocida: el caso HTTP entre ambos proyectos no inicia porque conserva una referencia
+  preexistente a `backend-comprobantes/src/database/migrate.js`, archivo que ya no existe. Este cambio
+  no sincroniza las claves de los despliegues ni corrige el middleware JWT que actualmente intercepta
+  el callback; ambos puntos requieren su propia correccion operativa o de rutas.
+
 ## 2026-11-13 - Activacion operativa del correo SMTP
 
 - Alcance: se completo la configuracion privada de `backend-comprobantes` con `MAIL_MODE=smtp`,

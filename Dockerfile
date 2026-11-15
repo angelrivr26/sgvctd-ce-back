@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Hora de Perú para los comprobantes SUNAT
-RUN apk add --no-cache tzdata && \
+RUN apk add --no-cache tzdata openssl && \
     cp /usr/share/zoneinfo/America/Lima /etc/localtime
 
 ENV NODE_ENV=production
