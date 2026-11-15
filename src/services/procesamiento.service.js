@@ -1,9 +1,16 @@
 import { ProviderError } from '../utils/errors.js';
+import { diagnosticError, diagnosticLog } from '../utils/diagnostic-log.js';
 
 const retryDelay = (attempt) =>
   Math.min(300, 2 ** Math.min(attempt, 8)) + Math.floor(Math.random() * 3);
 
-export function createProcesamientoService({ model, provider, documentos, config }) {
+export function createProcesamientoService({
+  model,
+  provider,
+  documentos,
+  config,
+  logger = console,
+}) {
   async function confirmEmission(record) {
     // FASES 2 y 3/6. Funcion interna; no la llama HTTP.
     // LLAMADO POR: process(), solo si la fila todavia no tiene resultado_emision.
@@ -41,10 +48,38 @@ export function createProcesamientoService({ model, provider, documentos, config
     // LLAMADO POR: process(), tambien en un reintento si la emision ya estaba confirmada.
     // HACE: reserva la generacion, crea los archivos y cierra el comprobante.
     // CONTINUA EN: model.startDocuments(), documentos.generate() y model.complete().
-    const generating = await model.startDocuments(record);
-    if (!generating) return;
-    const generated = await documentos.generate(generating);
-    await model.complete(generating, generated.documents, generated.templateVersion);
+    let stage = 'reservar_generacion';
+    diagnosticLog(logger, 'info', 'procesamiento.documentos_iniciado', {
+      comprobanteId: record.id,
+      intento: record.intentos,
+    });
+    try {
+      const generating = await model.startDocuments(record);
+      if (!generating) {
+        diagnosticLog(logger, 'info', 'procesamiento.documentos_omitido', {
+          comprobanteId: record.id,
+          motivo: 'reserva_no_disponible',
+        });
+        return;
+      }
+      stage = 'generar_archivos';
+      const generated = await documentos.generate(generating);
+      stage = 'guardar_metadatos_bd';
+      await model.complete(generating, generated.documents, generated.templateVersion);
+      diagnosticLog(logger, 'info', 'procesamiento.documentos_completado', {
+        comprobanteId: record.id,
+        tipos: generated.documents.map((document) => document.tipo),
+        versionPlantilla: generated.templateVersion,
+      });
+    } catch (error) {
+      diagnosticLog(logger, 'error', 'procesamiento.documentos_error', {
+        comprobanteId: record.id,
+        intento: record.intentos,
+        etapa: stage,
+        ...diagnosticError(error),
+      });
+      throw error;
+    }
   }
 
   return {
@@ -54,6 +89,11 @@ export function createProcesamientoService({ model, provider, documentos, config
       // HACE: si falta la respuesta SUNAT, la confirma; si ya existe, solo recupera los documentos.
       // CONTINUA EN: confirmEmission(). Si devuelve null, esta funcion termina.
       let confirmed = record.resultado_emision != null;
+      diagnosticLog(logger, 'info', 'procesamiento.iniciado', {
+        comprobanteId: record.id,
+        intento: record.intentos,
+        emisionConfirmada: confirmed,
+      });
       try {
         if (!confirmed) {
           record = await confirmEmission(record);
@@ -67,6 +107,13 @@ export function createProcesamientoService({ model, provider, documentos, config
         const code = String(error?.code || error?.name || 'ERROR_LOCAL')
           .replace(/[^A-Za-z0-9_:-]/g, '')
           .slice(0, 80);
+        diagnosticLog(logger, 'error', 'procesamiento.error', {
+          comprobanteId: record.id,
+          intento: record.intentos,
+          emisionConfirmada: confirmed,
+          reintentable: (!known || error.retryable) && record.intentos < config.maxAttempts,
+          ...diagnosticError(error),
+        });
         await model.fail(record, {
           message: confirmed
             ? 'La emision esta confirmada. Fallo la preparacion de documentos; se recuperara sin volver a emitir.'

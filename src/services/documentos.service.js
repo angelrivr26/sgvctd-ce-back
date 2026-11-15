@@ -6,27 +6,50 @@ import { AppError } from '../utils/errors.js';
 import { validateEmissionResult } from '../validators/resultado-emision.validator.js';
 import { renderComprobanteHtml } from '../templates/comprobante.js';
 import { createHtmlPdfRenderer } from './html-pdf.service.js';
+import { diagnosticError, diagnosticLog } from '../utils/diagnostic-log.js';
 
 /** Genera, guarda y verifica PDF/XML/CDR despues de confirmar la emision. */
 export function createDocumentosService(
   directory,
-  { pdfConfig = {}, htmlRenderer = renderComprobanteHtml, pdfRenderer } = {},
+  { pdfConfig = {}, htmlRenderer = renderComprobanteHtml, pdfRenderer, logger = console } = {},
 ) {
   const root = resolve(directory);
-  const renderPdf = pdfRenderer ?? createHtmlPdfRenderer(pdfConfig);
+  const renderPdf = pdfRenderer ?? createHtmlPdfRenderer(pdfConfig, logger);
+  diagnosticLog(logger, 'info', 'documentos.almacenamiento_configurado', {
+    directorioConfigurado: directory,
+    directorioResuelto: root,
+    directorioTrabajo: process.cwd(),
+  });
 
   async function generatePdf(record) {
-    validateEmissionResult(record.resultado_emision, record.id);
-    const view = await htmlRenderer(record, {
-      issuerName: pdfConfig.issuerName,
-      issuerAddress: pdfConfig.issuerAddress,
-    });
-    const content = await renderPdf(view);
-    const key = `${record.id}/${digest(content)}.pdf`;
-    return {
-      document: { tipo: 'PDF', ...(await save(key, content)) },
-      templateVersion: view.version,
-    };
+    let stage = 'validar_emision';
+    try {
+      validateEmissionResult(record.resultado_emision, record.id);
+      stage = 'renderizar_html';
+      const view = await htmlRenderer(record, {
+        issuerName: pdfConfig.issuerName,
+        issuerAddress: pdfConfig.issuerAddress,
+      });
+      diagnosticLog(logger, 'info', 'documentos.html_preparado', {
+        comprobanteId: record.id,
+        versionPlantilla: view.version,
+      });
+      stage = 'renderizar_pdf';
+      const content = await renderPdf(view);
+      stage = 'guardar_pdf';
+      const key = `${record.id}/${digest(content)}.pdf`;
+      return {
+        document: { tipo: 'PDF', ...(await save(key, content, 'PDF', record.id)) },
+        templateVersion: view.version,
+      };
+    } catch (error) {
+      diagnosticLog(logger, 'error', 'documentos.pdf_error', {
+        comprobanteId: record.id,
+        etapa: stage,
+        ...diagnosticError(error),
+      });
+      throw error;
+    }
   }
 
   function safePath(key) {
@@ -37,18 +60,55 @@ export function createDocumentosService(
     return file;
   }
 
-  async function save(key, content) {
+  async function save(key, content, type, comprobanteId) {
     const bytes = Buffer.from(content);
-    const path = safePath(key);
-    await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${randomUUID()}.tmp`;
+    let path;
+    let temporary;
+    let stage = 'resolver_ruta';
     try {
-      await writeFile(temporary, bytes, { flag: 'wx' });
-      await rename(temporary, path);
-    } finally {
-      await unlink(temporary).catch((error) => {
-        if (error.code !== 'ENOENT') throw error;
+      path = safePath(key);
+      diagnosticLog(logger, 'info', 'documentos.escritura_iniciada', {
+        comprobanteId,
+        tipo: type,
+        directorioDestino: dirname(path),
+        bytes: bytes.length,
       });
+      stage = 'crear_directorio';
+      await mkdir(dirname(path), { recursive: true });
+      temporary = `${path}.${randomUUID()}.tmp`;
+      stage = 'escribir_temporal';
+      await writeFile(temporary, bytes, { flag: 'wx' });
+      stage = 'publicar_archivo';
+      await rename(temporary, path);
+      diagnosticLog(logger, 'info', 'documentos.escritura_completada', {
+        comprobanteId,
+        tipo: type,
+        rutaDestino: path,
+        bytes: bytes.length,
+      });
+    } catch (error) {
+      diagnosticLog(logger, 'error', 'documentos.escritura_error', {
+        comprobanteId,
+        tipo: type,
+        etapa: stage,
+        directorioAlmacenamiento: root,
+        ...(path ? { rutaDestino: path } : {}),
+        ...diagnosticError(error),
+      });
+      throw error;
+    } finally {
+      if (temporary)
+        await unlink(temporary).catch((error) => {
+          if (error.code === 'ENOENT') return;
+          diagnosticLog(logger, 'error', 'documentos.escritura_error', {
+            comprobanteId,
+            tipo: type,
+            etapa: 'limpiar_temporal',
+            directorioAlmacenamiento: root,
+            ...diagnosticError(error),
+          });
+          throw error;
+        });
     }
     return { clave: key, sha256: digest(bytes), bytes: bytes.length };
   }
@@ -59,23 +119,48 @@ export function createDocumentosService(
       // LLAMADO POR: procesamiento.service.js -> generateDocuments().
       // HACE: toma XML y CDR ya guardados en el resultado, dibuja el PDF y escribe los tres archivos.
       // CONTINUA EN: comprobante.model.js -> complete().
-      const result = validateEmissionResult(record.resultado_emision, record.id);
-      const originals = result.documentos;
-      const rendered = await generatePdf(record);
-      const contents = [
-        ...originals.map((doc) => ({
-          tipo: doc.tipo,
-          content: Buffer.from(doc.contenido, 'utf8'),
-        })),
-      ];
-      const documents = [rendered.document];
-      for (const document of contents) {
-        // Una reserva vencida no puede sobrescribir archivos de otro contenido.
-        const extension = document.tipo === 'PDF' ? 'pdf' : 'xml';
-        const key = `${record.id}/${digest(document.content)}.${extension}`;
-        documents.push({ tipo: document.tipo, ...(await save(key, document.content)) });
+      diagnosticLog(logger, 'info', 'documentos.generacion_iniciada', {
+        comprobanteId: record.id,
+        directorioAlmacenamiento: root,
+      });
+      let stage = 'validar_emision';
+      try {
+        const result = validateEmissionResult(record.resultado_emision, record.id);
+        const originals = result.documentos;
+        stage = 'generar_pdf';
+        const rendered = await generatePdf(record);
+        const contents = [
+          ...originals.map((doc) => ({
+            tipo: doc.tipo,
+            content: Buffer.from(doc.contenido, 'utf8'),
+          })),
+        ];
+        const documents = [rendered.document];
+        for (const document of contents) {
+          // Una reserva vencida no puede sobrescribir archivos de otro contenido.
+          stage = `guardar_${document.tipo.toLowerCase()}`;
+          const extension = document.tipo === 'PDF' ? 'pdf' : 'xml';
+          const key = `${record.id}/${digest(document.content)}.${extension}`;
+          documents.push({
+            tipo: document.tipo,
+            ...(await save(key, document.content, document.tipo, record.id)),
+          });
+        }
+        diagnosticLog(logger, 'info', 'documentos.generacion_completada', {
+          comprobanteId: record.id,
+          tipos: documents.map((document) => document.tipo),
+          versionPlantilla: rendered.templateVersion,
+        });
+        return { documents, templateVersion: rendered.templateVersion };
+      } catch (error) {
+        diagnosticLog(logger, 'error', 'documentos.generacion_error', {
+          comprobanteId: record.id,
+          etapa: stage,
+          directorioAlmacenamiento: root,
+          ...diagnosticError(error),
+        });
+        throw error;
       }
-      return { documents, templateVersion: rendered.templateVersion };
     },
     async read(document) {
       let content;

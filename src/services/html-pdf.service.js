@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { PDFDocument } from 'pdf-lib';
 import { AppError } from '../utils/errors.js';
+import { diagnosticError, diagnosticLog } from '../utils/diagnostic-log.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -53,15 +54,43 @@ export function resolvePdfBrowser(configuredPath = '') {
 }
 
 /** Convierte HTML autocontenido a PDF sin JavaScript y con resolucion de red bloqueada. */
-export function createHtmlPdfRenderer(config = {}) {
+export function createHtmlPdfRenderer(config = {}, logger = console) {
   return async function render(view) {
-    const executablePath = resolvePdfBrowser(config.browserPath);
-    const temporaryDirectory = await mkdtemp(join(tmpdir(), 'comprobantes-pdf-'));
+    let executablePath;
+    try {
+      executablePath = resolvePdfBrowser(config.browserPath);
+      diagnosticLog(logger, 'info', 'documentos.navegador_pdf_resuelto', {
+        rutaNavegador: executablePath,
+        rutaConfigurada: Boolean(config.browserPath),
+        plataforma: process.platform,
+      });
+    } catch (error) {
+      diagnosticLog(logger, 'error', 'documentos.navegador_pdf_error', {
+        etapa: 'resolver_navegador',
+        rutaNavegadorConfigurada: config.browserPath || null,
+        plataforma: process.platform,
+        ...diagnosticError(error),
+      });
+      throw error;
+    }
+
+    let temporaryDirectory;
+    try {
+      temporaryDirectory = await mkdtemp(join(tmpdir(), 'comprobantes-pdf-'));
+    } catch (error) {
+      diagnosticLog(logger, 'error', 'documentos.render_pdf_error', {
+        etapa: 'crear_directorio_temporal',
+        ...diagnosticError(error),
+      });
+      throw error;
+    }
     const htmlPath = join(temporaryDirectory, 'comprobante.html');
     const pdfPath = join(temporaryDirectory, 'comprobante.pdf');
     const profilePath = join(temporaryDirectory, 'perfil-chromium');
+    let stage = 'escribir_html_temporal';
     try {
       await writeFile(htmlPath, view.html, { encoding: 'utf8', flag: 'wx' });
+      stage = 'ejecutar_chromium';
       await execFileAsync(
         executablePath,
         [
@@ -88,10 +117,12 @@ export function createHtmlPdfRenderer(config = {}) {
           maxBuffer: 1024 * 1024,
         },
       );
+      stage = 'leer_pdf_temporal';
       const rendered = await readFile(pdfPath);
       if (!rendered.subarray(0, 5).equals(Buffer.from('%PDF-')))
         throw new Error('Chromium no produjo un archivo PDF valido.');
 
+      stage = 'normalizar_metadatos_pdf';
       const pdf = await PDFDocument.load(rendered);
       const issuedAt = new Date(view.issuedAt);
       pdf.setCreationDate(issuedAt);
@@ -100,8 +131,18 @@ export function createHtmlPdfRenderer(config = {}) {
       pdf.setAuthor(view.issuer);
       pdf.setSubject(`Plantilla ${view.version}`);
       pdf.setCreator('Sistema de Comprobantes SERNANP');
-      return Buffer.from(await pdf.save());
+      const content = Buffer.from(await pdf.save());
+      diagnosticLog(logger, 'info', 'documentos.render_pdf_completado', {
+        versionPlantilla: view.version,
+        bytes: content.length,
+      });
+      return content;
     } catch (error) {
+      diagnosticLog(logger, 'error', 'documentos.render_pdf_error', {
+        etapa: stage,
+        rutaNavegador: executablePath,
+        ...diagnosticError(error),
+      });
       if (error instanceof AppError) throw error;
       throw new AppError(
         503,
@@ -109,7 +150,15 @@ export function createHtmlPdfRenderer(config = {}) {
         `No se pudo generar la representación PDF: ${error.message}`,
       );
     } finally {
-      await rm(temporaryDirectory, { recursive: true, force: true });
+      try {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      } catch (error) {
+        diagnosticLog(logger, 'error', 'documentos.render_pdf_error', {
+          etapa: 'limpiar_directorio_temporal',
+          ...diagnosticError(error),
+        });
+        throw error;
+      }
     }
   };
 }

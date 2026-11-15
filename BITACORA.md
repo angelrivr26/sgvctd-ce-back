@@ -1,5 +1,24 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-15 - Diagnostico de preparacion documental en Docker
+
+- Alcance: se agregaron logs JSON por etapa desde la reserva documental hasta el cierre en base de
+  datos. Las trazas identifican validacion, HTML, resolucion y ejecucion de Chromium, PDF, creacion
+  de directorios, escritura temporal, publicacion de PDF/XML/CDR y persistencia de sus metadatos.
+- Motivo: una compra con emision confirmada quedaba en `REQUIERE_ATENCION` con un mensaje generico
+  que no permitia distinguir una falla del navegador PDF, del filesystem del contenedor o de la
+  actualizacion final en PostgreSQL.
+- Operacion y privacidad: al componer el servicio se registra `DOCUMENT_DIRECTORY` configurado y su
+  ruta absoluta efectiva dentro del contenedor. Los errores incluyen codigo, etapa, ruta tecnica y
+  traza acotada; no se registran payloads, XML, CDR, credenciales ni datos del comprador.
+- Validacion: 23/23 pruebas aprobaron, incluidos casos nuevos para una falla de renderizado PDF y
+  una falla de escritura documental ya confirmada; `npm run check` verifico la sintaxis de 53
+  archivos y la bitacora. Los archivos de este cambio cumplen Prettier. El chequeo global conserva
+  siete diferencias de formato preexistentes en el frontend, que no se modifico.
+- Limitaciones: este cambio es exclusivamente diagnostico; no instala Chromium, no modifica la
+  imagen Docker, no cambia `DOCUMENT_DIRECTORY`, no agrega volumen persistente y no reprograma
+  comprobantes que ya agotaron sus intentos. El proveedor fiscal y la logica de emision no cambian.
+
 ## 2026-11-14 - Credenciales y callback alineados con Boletos
 
 - Configuracion: `INTEGRATION_API_KEY` y `COMPROBANTES_API_KEY` coinciden; asimismo,
