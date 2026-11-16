@@ -1,4 +1,13 @@
-export function createEntregaService({ model, comprobantes, correo, integracion, config }) {
+import { diagnosticError, diagnosticLog } from '../utils/diagnostic-log.js';
+
+export function createEntregaService({
+  model,
+  comprobantes,
+  correo,
+  integracion,
+  config,
+  logger = console,
+}) {
   return {
     async process(job) {
       // FASES 5 y 6/6: despachador de entregas independientes.
@@ -15,7 +24,15 @@ export function createEntregaService({ model, comprobantes, correo, integracion,
             ? await correo.send(job, detail)
             : await integracion.notify(job, detail);
         await model.complete(job, state);
-      } catch {
+      } catch (error) {
+        // No se registran destinatarios, documentos ni credenciales.
+        diagnosticLog(logger, 'error', 'entrega.error', {
+          entregaId: job.id,
+          comprobanteId: job.comprobante_id,
+          tipo: job.tipo,
+          intento: job.intentos,
+          ...diagnosticError(error),
+        });
         await model.fail(job, job.intentos < config.maxAttempts, Math.min(300, 2 ** job.intentos));
       }
     },

@@ -22,7 +22,10 @@ export function loadConfig(overrides = {}) {
     if (!['true', 'false'].includes(value)) throw new Error(`Configuracion invalida: ${name}`);
     return value === 'true';
   };
-  const mailMode = env.MAIL_MODE || 'capture';
+  // El modo debe ser explicito. Asi un despliegue nunca cambia a captura
+  // local solo porque una variable no llego al contenedor.
+  const mailMode = env.MAIL_MODE?.trim();
+  if (!mailMode) throw new Error('Falta MAIL_MODE. Use capture en local o smtp en despliegue.');
   if (!['capture', 'smtp'].includes(mailMode)) throw new Error('Configuracion invalida: MAIL_MODE');
   const smtp = Object.freeze({
     host: env.SMTP_HOST?.trim() || '',

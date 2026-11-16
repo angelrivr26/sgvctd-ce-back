@@ -15,6 +15,16 @@ await verifyDatabaseSchema(database);
 // ARRANQUE C: componer servicios y rutas en un unico punto.
 const services = createApplication(database, config);
 const app = createApp({ services, database, config });
+if (config.workersEnabled) {
+  try {
+    const mailStatus = await services.correo.verify();
+    console.log(`Correo Comprobantes: ${mailStatus}.`);
+  } catch (error) {
+    console.error(`No se pudo verificar SMTP: ${error.code || error.name}.`);
+    // La emision y los callbacks continúan. Las entregas de correo reintentan
+    // de forma independiente y dejan su propio diagnostico.
+  }
+}
 // ARRANQUE D: aceptar HTTP e iniciar workers si estan habilitados.
 const server = app.listen(config.port, config.host);
 server.once('listening', () => {

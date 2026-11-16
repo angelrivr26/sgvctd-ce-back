@@ -12,6 +12,13 @@ const database = await createDatabase(config);
 // WORKER SEPARADO: verificar en solo lectura el esquema preparado por el DBA.
 await verifyDatabaseSchema(database);
 const services = createApplication(database, config);
+try {
+  const mailStatus = await services.correo.verify();
+  console.log(`Correo Comprobantes: ${mailStatus}.`);
+} catch (error) {
+  console.error(`No se pudo verificar SMTP: ${error.code || error.name}.`);
+  // No detener la emision fiscal por una indisponibilidad temporal de correo.
+}
 // Proceso aparte, sin HTTP. Retoma las fases de envio, documentos y entregas.
 // LLAMADO POR: npm run worker. El arranque normal usa src/index.js y no entra por este archivo.
 services.worker.start();

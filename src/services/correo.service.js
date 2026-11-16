@@ -14,6 +14,16 @@ export function createCorreoService(config, { createTransport = nodemailer.creat
   const { mode, directory, smtp = {} } = config;
   let transporter;
 
+  function getTransporter() {
+    transporter ??= createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: { user: smtp.user, pass: smtp.pass },
+    });
+    return transporter;
+  }
+
   function message(detail) {
     const documentNumber = `${detail.serie}-${detail.numero}`;
     const type = detail.tipoComprobante.toLowerCase();
@@ -32,6 +42,11 @@ export function createCorreoService(config, { createTransport = nodemailer.creat
   }
 
   return {
+    async verify() {
+      if (mode === 'capture') return 'CAPTURA_LOCAL';
+      await getTransporter().verify();
+      return 'SMTP_VERIFICADO';
+    },
     async send(job, detail) {
       // FASE 5/6, entrega de correo independiente de la emision fiscal.
       // LLAMADO POR: entrega.service.js -> process(), cuando el trabajo es tipo CORREO.
@@ -57,13 +72,7 @@ export function createCorreoService(config, { createTransport = nodemailer.creat
         return 'CAPTURADO_PRUEBA';
       }
 
-      transporter ??= createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure,
-        auth: { user: smtp.user, pass: smtp.pass },
-      });
-      await transporter.sendMail({ from: smtp.from, ...mail });
+      await getTransporter().sendMail({ from: smtp.from, ...mail });
       return 'ENVIADO';
     },
   };

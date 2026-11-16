@@ -1,5 +1,31 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-15 - Separacion segura de correo local y desplegado
+
+- Alcance: `MAIL_MODE` pasa a ser obligatorio; localhost conserva captura explicita y Docker fuerza
+  `MAIL_MODE=smtp` y `WORKERS_ENABLED=true`. El servicio verifica SMTP antes de iniciar un proceso
+  que ejecuta workers. No deben ejecutarse workers locales y desplegados simultaneamente sobre la
+  misma base.
+  Una configuracion incompleta impide arrancar; una indisponibilidad temporal se registra, pero no
+  detiene la emision fiscal ni los callbacks y conserva los reintentos independientes del correo.
+- Motivo: impedir que un redeploy vuelva silenciosamente a captura local y dejar explicito que un
+  worker de localhost no debe competir con el worker desplegado sobre la misma base.
+- Diagnostico: los errores de entrega ahora se registran por identificador, tipo e intento, sin
+  destinatarios, documentos ni credenciales. El estado persistido y los reintentos no cambian.
+- Interfaz: la accion y su confirmacion ahora dicen `Reenviar correo`, sin afirmar que el destino es
+  un buzon local; los estados historicos `CAPTURADO_PRUEBA` siguen identificandose como tales.
+- Seguridad: `.env.example` deja de contener datos de conexion reales. El `.env` operativo se
+  conserva porque actualmente forma parte del inicio de la integracion; Docker Compose lo inyecta
+  en ejecucion y `.dockerignore` evita copiarlo dentro de la imagen. La migracion futura a secretos
+  administrados debe coordinarse sin retirar primero el archivo requerido por el despliegue.
+- Validacion: 25/25 pruebas aprobadas, `npm run check` verifico 54 archivos y el frontend completo
+  genero correctamente su build de produccion. Los archivos modificados cumplen Prettier; el
+  chequeo global conserva siete incidencias preexistentes del frontend, fuera de este cambio.
+  Docker no esta instalado en el equipo local, por lo que `docker compose config` debe ejecutarse
+  en el servidor antes de recrear el contenedor.
+- Limitacion: las credenciales SMTP se suministran exclusivamente en el entorno desplegado; no se
+  inventan ni duplican dentro del codigo o de archivos de ejemplo.
+
 ## 2026-11-15 - Generacion PDF nativa con jsPDF
 
 - Alcance: se reemplazo el proceso HTML/Chromium por un render A4 nativo con `jsPDF` 4.2.1. El

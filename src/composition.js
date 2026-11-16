@@ -55,6 +55,7 @@ export function createApplication(
     correo,
     integracion,
     config,
+    logger,
   });
   const worker = createWorker({
     comprobanteModel: model,
@@ -63,5 +64,5 @@ export function createApplication(
     entregas,
     config,
   });
-  return { auth: createAuthService(database, config), comprobantes, worker };
+  return { auth: createAuthService(database, config), comprobantes, correo, worker };
 }

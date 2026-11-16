@@ -22,7 +22,14 @@ npm run setup:local
 npm run dev
 ```
 
-`npm run dev` inicia API y workers en el mismo proceso. `npm run worker` se usa solo con PostgreSQL cuando la API tiene `WORKERS_ENABLED=false`.
+`npm run dev` inicia la API y, cuando `WORKERS_ENABLED=true`, tambien los workers. No ejecute al
+mismo tiempo un worker local y otro desplegado sobre la misma base. `npm run worker` se usa solo en
+un ambiente controlado con PostgreSQL.
+
+Docker Compose fuerza `WORKERS_ENABLED=true` y `MAIL_MODE=smtp`. El despliegue se detiene si faltan
+las variables `SMTP_*`. Si SMTP no responde, registra el error y reintenta el correo sin detener la
+emision fiscal ni los callbacks. En localhost use `MAIL_MODE=capture` para no contactar
+destinatarios reales.
 
 Comandos de verificacion:
 
