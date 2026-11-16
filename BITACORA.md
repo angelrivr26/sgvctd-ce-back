@@ -696,3 +696,17 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** alinear el runtime del backend con el requisito solicitado sin cambiar funcionalidades ni frontend.
 - **Validación:** revisión del cambio de configuración; no fue posible leer el lockfile ni ejecutar npm en esta sesión porque la herramienta de terminal falló al iniciar.
 - **Limitaciones:** las dependencias y el arranque aún deben validarse bajo Node.js 20. Esta rama de Node está fuera de mantenimiento oficial desde el 24 de marzo de 2026.
+
+# Configuración SMTP del despliegue (2026-11-15)
+
+- **Alcance:** se habilita `MAIL_MODE=smtp` en el `.env` operativo de Comprobantes y se trasladan las variables SMTP usadas por Backend Externo. Se completa `SMTP_SECURE=false` y el remitente con la misma cuenta institucional.
+- **Motivo:** los contenedores son procesos aislados; Comprobantes no hereda el entorno SMTP de Backend Externo ni necesita comunicarse con ese backend para enviar sus propios correos.
+- **Validación:** carga de configuración, pruebas automatizadas, verificación sintáctica y comprobación de conexión SMTP sin envío de mensajes.
+- **Limitaciones:** las credenciales dependen del servidor institucional y deben rotarse/gestionarse como secretos del despliegue. La verificación SMTP no confirma por sí sola la entrega final en la bandeja del destinatario.
+
+# Uso obligatorio de la configuración SMTP (2026-11-15)
+
+- **Alcance:** `composition.js` entrega al servicio de correo el valor exacto de `MAIL_MODE` cargado desde `.env`, junto con `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` y `SMTP_FROM` agrupados en `config.smtp`.
+- **Motivo:** evitar que una configuración ausente cambie silenciosamente a captura local; `env.js` ya valida que el modo sea explícito.
+- **Validación:** pruebas automatizadas, verificación sintáctica y revisión del flujo `.env` → `env.js` → `composition.js` → `correo.service.js`.
+- **Limitaciones:** las credenciales permanecen fuera del código JavaScript y deben existir en el `.env` operativo de cada contenedor.

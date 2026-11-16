@@ -44,7 +44,7 @@ export function createApplication(
     logger,
   });
   const correo = createCorreoService({
-    mode: config.mailMode ?? 'capture',
+    mode: config.mailMode,
     directory: config.mailDirectory,
     smtp: config.smtp,
   });
