@@ -2,14 +2,15 @@
 
 ## 2026-11-15 - Separacion segura de correo local y desplegado
 
-- Alcance: `MAIL_MODE` pasa a ser obligatorio; localhost conserva captura explicita y Docker fuerza
-  `MAIL_MODE=smtp` y `WORKERS_ENABLED=true`. El servicio verifica SMTP antes de iniciar un proceso
-  que ejecuta workers. No deben ejecutarse workers locales y desplegados simultaneamente sobre la
-  misma base.
-  Una configuracion incompleta impide arrancar; una indisponibilidad temporal se registra, pero no
-  detiene la emision fiscal ni los callbacks y conserva los reintentos independientes del correo.
-- Motivo: impedir que un redeploy vuelva silenciosamente a captura local y dejar explicito que un
-  worker de localhost no debe competir con el worker desplegado sobre la misma base.
+- Alcance: `MAIL_MODE` pasa a ser obligatorio y Docker Compose carga exclusivamente `.env`, sin
+  sobrescribir el modo de correo, workers, base de datos, SUNAT ni autenticacion. El servicio
+  verifica SMTP antes de iniciar un proceso que ejecuta workers. No deben ejecutarse workers
+  locales y desplegados simultaneamente sobre la misma base. Una configuracion SMTP incompleta o
+  una indisponibilidad temporal se registra como incidencia de correo, pero no impide el inicio de
+  sesion ni detiene la emision fiscal o los callbacks. Se conservan los reintentos independientes
+  del correo.
+- Motivo: evitar diferencias ocultas entre `.env` y Docker, y dejar explicito que un worker de
+  localhost no debe competir con el worker desplegado sobre la misma base.
 - Diagnostico: los errores de entrega ahora se registran por identificador, tipo e intento, sin
   destinatarios, documentos ni credenciales. El estado persistido y los reintentos no cambian.
 - Interfaz: la accion y su confirmacion ahora dicen `Reenviar correo`, sin afirmar que el destino es

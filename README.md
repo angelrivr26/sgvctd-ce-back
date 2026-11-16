@@ -26,10 +26,10 @@ npm run dev
 mismo tiempo un worker local y otro desplegado sobre la misma base. `npm run worker` se usa solo en
 un ambiente controlado con PostgreSQL.
 
-Docker Compose fuerza `WORKERS_ENABLED=true` y `MAIL_MODE=smtp`. El despliegue se detiene si faltan
-las variables `SMTP_*`. Si SMTP no responde, registra el error y reintenta el correo sin detener la
-emision fiscal ni los callbacks. En localhost use `MAIL_MODE=capture` para no contactar
-destinatarios reales.
+Docker Compose carga exclusivamente `.env`. Para desarrollo use `MAIL_MODE=capture`; para envio
+real configure `MAIL_MODE=smtp` y todas las variables `SMTP_*` en ese mismo archivo. Si SMTP no
+responde o la configuracion esta incompleta, registra `SMTP_CONFIG_INCOMPLETA` y reintenta el
+correo sin detener el inicio de sesion, la emision fiscal ni los callbacks.
 
 Comandos de verificacion:
 

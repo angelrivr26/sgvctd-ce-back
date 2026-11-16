@@ -35,16 +35,6 @@ export function loadConfig(overrides = {}) {
     pass: env.SMTP_PASS || '',
     from: env.SMTP_FROM?.trim() || '',
   });
-  if (mailMode === 'smtp') {
-    for (const [name, value] of [
-      ['SMTP_HOST', smtp.host],
-      ['SMTP_USER', smtp.user],
-      ['SMTP_PASS', smtp.pass],
-      ['SMTP_FROM', smtp.from],
-    ]) {
-      if (!value) throw new Error(`Falta ${name} para MAIL_MODE=smtp.`);
-    }
-  }
   const config = {
     environment: env.NODE_ENV || 'development',
     host: env.HOST || '127.0.0.1',

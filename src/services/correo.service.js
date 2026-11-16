@@ -14,7 +14,23 @@ export function createCorreoService(config, { createTransport = nodemailer.creat
   const { mode, directory, smtp = {} } = config;
   let transporter;
 
+  function validateSmtp() {
+    const required = [
+      ['SMTP_HOST', smtp.host],
+      ['SMTP_USER', smtp.user],
+      ['SMTP_PASS', smtp.pass],
+      ['SMTP_FROM', smtp.from],
+    ];
+    const missing = required.filter(([, value]) => !value).map(([name]) => name);
+    if (!missing.length) return;
+
+    const error = new Error(`Falta configurar ${missing.join(', ')} para MAIL_MODE=smtp.`);
+    error.code = 'SMTP_CONFIG_INCOMPLETA';
+    throw error;
+  }
+
   function getTransporter() {
+    validateSmtp();
     transporter ??= createTransport({
       host: smtp.host,
       port: smtp.port,
