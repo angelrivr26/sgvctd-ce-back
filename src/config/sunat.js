@@ -36,8 +36,10 @@ export function parseSunatConfig(env = {}) {
     undefinedTax: env.SUNAT_AFECTACION_POR_DEFINIR || '',
   };
 
-  if (!/^[A-Z0-9]{4}$/.test(config.invoiceSeries) || !/^[A-Z0-9]{4}$/.test(config.receiptSeries))
-    throw new Error('Las series SUNAT deben contener cuatro caracteres alfanumericos.');
+  if (!/^F[A-Z0-9]{3}$/.test(config.invoiceSeries))
+    throw new Error('SUNAT_SERIE_FACTURA debe iniciar con F y contener cuatro caracteres.');
+  if (!/^B[A-Z0-9]{3}$/.test(config.receiptSeries))
+    throw new Error('SUNAT_SERIE_BOLETA debe iniciar con B y contener cuatro caracteres.');
   if (!/^\d{4}$/.test(config.localCode))
     throw new Error('SUNAT_CODIGO_LOCAL debe contener cuatro digitos.');
   if (!['', 'EXONERADO', 'INAFECTO'].includes(config.undefinedTax))

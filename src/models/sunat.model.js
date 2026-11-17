@@ -96,5 +96,13 @@ export function createSunatModel(database) {
         ],
       );
     },
+    async retryAfterSoapFault(id) {
+      await database.query(
+        `UPDATE sunat_envios SET estado='PREPARADO',respuesta_soap=NULL,http_status=NULL,
+         fecha_respuesta=NULL,error_transporte=NULL
+         WHERE comprobante_id=$1 AND estado='RESPONDIDO' RETURNING comprobante_id`,
+        [id],
+      );
+    },
   };
 }

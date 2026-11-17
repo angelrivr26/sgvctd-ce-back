@@ -794,3 +794,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** permitir que el flujo principal se lea en orden y que cada calculo tenga un nombre directo, sin cambiar el contrato ni introducir abstracciones nuevas.
 - **Validacion:** comparacion del XML y del resultado de la solicitud, pruebas automatizadas y verificacion sintactica del proyecto.
 - **Limitaciones:** se conserva deliberadamente el formato XML compacto, los calculos con `BigInt`, los redondeos, el orden de las validaciones y sus mensajes; no se realizan llamadas reales a SUNAT.
+
+# Adecuacion inicial al flujo SUNAT UBL 2.1 (2026-11-16)
+
+- **Alcance:** el XML incorpora los identificadores y atributos de los catalogos SUNAT para tipo de operacion, tipo de documento, identidad, afectacion IGV, precio, unidad, moneda y categoria tributaria. Emisor y comprador usan `PartyTaxScheme`; las series se validan con prefijo `F` o `B`. El servicio distingue excepciones SOAP de rechazos fiscales, conserva las observaciones de la CDR y recupera mediante `getStatusCdr` una respuesta perdida despues de iniciar un envio en produccion. Las boletas individuales quedan bloqueadas en produccion porque requieren Resumen Diario.
+- **Motivo:** evitar rechazos por una estructura UBL incompleta y no registrar una falla tecnica SOAP como rechazo tributario. La conciliacion impide reenviar a ciegas una factura cuyo resultado de red sea incierto.
+- **Validacion:** 25 pruebas automatizadas aprobadas y `node scripts/check.js` aprobado con sintaxis de 55 archivos. Se agregaron verificaciones de `ProfileID`, catalogos 01, 06 y 07, `PartyTaxScheme`, ausencia del antiguo `listID="0101"` y prefijos de series. Formato y `git diff --check` verificados.
+- **Limitaciones:** no se realizo una emision real porque el entorno no contiene credenciales ni certificado productivos. El flujo productivo de boletas necesita implementar y probar `SummaryDocuments`, `sendSummary` y consulta por ticket; hasta entonces se rechaza antes de contactar SUNAT. Quedan pendientes la validacion local contra los XSD/reglas vigentes y la validacion criptografica de la firma recibida en la CDR.

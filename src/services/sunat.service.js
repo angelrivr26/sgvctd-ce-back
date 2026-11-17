@@ -10,6 +10,14 @@ const maxResponse = 4_000_000;
 
 class SunatBusyError extends Error {}
 
+function securityHeader(config) {
+  return `<soapenv:Header><wsse:Security soapenv:mustUnderstand="1"><wsse:UsernameToken><wsse:Username>${escapeXml(config.username)}</wsse:Username><wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(config.password)}</wsse:Password></wsse:UsernameToken></wsse:Security></soapenv:Header>`;
+}
+
+function soapEnvelope(config, body) {
+  return `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="${soapNamespace}" xmlns:ser="http://service.sunat.gob.pe" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">${securityHeader(config)}<soapenv:Body>${body}</soapenv:Body></soapenv:Envelope>`;
+}
+
 function localPreparationError(stage, error) {
   if (error instanceof ProviderError) return error;
   const code = String(error?.code || error?.name || 'ERROR_LOCAL')
@@ -63,6 +71,7 @@ export function parseSunatResponse(text, httpStatus, expectedReference, expected
         fault.getElementsByTagName('faultstring')[0]?.textContent ?? 'Falla SOAP sin descripcion'
       ).slice(0, 1000),
       aceptado: false,
+      esExcepcion: true,
     };
   }
   if (httpStatus < 200 || httpStatus >= 300)
@@ -154,7 +163,10 @@ export function createSunatTransport({
       const zip = zipSync({
         [`${request.nombreArchivo}.xml`]: new Uint8Array(Buffer.from(request.xml, 'utf8')),
       });
-      const soap = `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="${soapNamespace}" xmlns:ser="http://service.sunat.gob.pe" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"><soapenv:Header><wsse:Security soapenv:mustUnderstand="1"><wsse:UsernameToken><wsse:Username>${escapeXml(config.username)}</wsse:Username><wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(config.password)}</wsse:Password></wsse:UsernameToken></wsse:Security></soapenv:Header><soapenv:Body><ser:sendBill><fileName>${escapeXml(request.nombreArchivo)}.zip</fileName><contentFile>${Buffer.from(zip).toString('base64')}</contentFile></ser:sendBill></soapenv:Body></soapenv:Envelope>`;
+      const soap = soapEnvelope(
+        config,
+        `<ser:sendBill><fileName>${escapeXml(request.nombreArchivo)}.zip</fileName><contentFile>${Buffer.from(zip).toString('base64')}</contentFile></ser:sendBill>`,
+      );
       await onPrepared({ zip: Buffer.from(zip) });
       const response = await fetchImpl(config.endpoint, {
         method: 'POST',
@@ -166,6 +178,44 @@ export function createSunatTransport({
       const text = await readResponse(response);
       await onResponse({ text, httpStatus: response.status });
       return parseSunatResponse(text, response.status, request.referencia, request.nombreArchivo);
+    },
+    async recoverCdr(request) {
+      const documentCode = request.tipo === 'FACTURA' ? '01' : '03';
+      const soap = soapEnvelope(
+        config,
+        `<ser:getStatusCdr><rucComprobante>${escapeXml(request.ruc)}</rucComprobante><tipoComprobante>${documentCode}</tipoComprobante><serieComprobante>${escapeXml(request.serie)}</serieComprobante><numeroComprobante>${escapeXml(request.numero)}</numeroComprobante></ser:getStatusCdr>`,
+      );
+      const response = await fetchImpl(config.endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(config.timeoutMs),
+        headers: { 'content-type': 'text/xml; charset=utf-8', SOAPAction: 'urn:getStatusCdr' },
+        body: soap,
+      });
+      const text = await readResponse(response);
+      if (!response.ok)
+        throw new Error(`SUNAT respondio HTTP ${response.status} al recuperar CDR.`);
+      const document = parseXml(text, maxResponse);
+      const body = uniqueElement(document, soapNamespace, 'Body');
+      const faults = body.getElementsByTagNameNS(soapNamespace, 'Fault');
+      if (faults.length) {
+        const message = faults[0].getElementsByTagName('faultstring')[0]?.textContent;
+        throw new Error(message || 'SUNAT no pudo recuperar la CDR.');
+      }
+      const status = uniqueElement(body, '*', 'statusCdr');
+      const statusCode = uniqueElement(status, '*', 'statusCode').textContent.trim();
+      const contents = status.getElementsByTagNameNS('*', 'content');
+      const encoded = contents[0]?.textContent.replace(/\s/g, '') ?? '';
+      if (!encoded) {
+        const message = status.getElementsByTagNameNS('*', 'statusMessage')[0]?.textContent.trim();
+        throw new Error(message || `SUNAT no entrego la CDR: ${statusCode}.`);
+      }
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0)
+        throw new Error('SUNAT devolvio una CDR recuperada sin contenido valido.');
+      return soapEnvelope(
+        config,
+        `<ser:sendBillResponse><applicationResponse>${encoded}</applicationResponse></ser:sendBillResponse>`,
+      );
     },
   };
 }
@@ -184,6 +234,29 @@ export function createSunatProvider(
 ) {
   const model = createSunatModel(database);
 
+  async function recoverStartedSubmission(row, id) {
+    if (row.ambiente !== 'production')
+      throw new ProviderError(
+        'SUNAT beta no permite conciliar automaticamente una respuesta perdida.',
+        { uncertain: true, retryable: false },
+      );
+    const sunat = createSunatTransport({ config, fetchImpl });
+    try {
+      const recoveredSoap = await sunat.recoverCdr(row.solicitud);
+      await model.saveResponse(
+        id,
+        { text: recoveredSoap, httpStatus: 200 },
+        new Date().toISOString(),
+      );
+    } catch (error) {
+      throw new ProviderError(`No se pudo recuperar la CDR SUNAT: ${error.message}`, {
+        uncertain: true,
+        retryable: true,
+      });
+    }
+    return consultarResultado(id);
+  }
+
   async function consultarResultado(id) {
     // FASE 3/6.
     // LLAMADO POR: confirmEmission(), solicitarEmision() y sendPreparedRequest() despues del POST.
@@ -196,11 +269,7 @@ export function createSunatProvider(
       throw localPreparationError('consultar el diario SUNAT', error);
     }
     if (!row || row.estado === 'PREPARADO') return null;
-    if (row.estado === 'ENVIO_INICIADO')
-      throw new ProviderError(
-        'SUNAT: envio iniciado sin respuesta persistida. Requiere conciliacion y no se reenviara automaticamente.',
-        { uncertain: true, retryable: false },
-      );
+    if (row.estado === 'ENVIO_INICIADO') return recoverStartedSubmission(row, id);
     const request = row.solicitud;
     let result;
     try {
@@ -216,6 +285,17 @@ export function createSunatProvider(
         { uncertain: true, retryable: false },
       );
     }
+    if (result.esExcepcion) {
+      const retryable = /Server/i.test(result.codigo) && !/Client/i.test(result.codigo);
+      if (retryable) {
+        await model.retryAfterSoapFault(id);
+        return { estado: 'PENDIENTE' };
+      }
+      throw new ProviderError(`SUNAT devolvio una excepcion: ${result.descripcion}`, {
+        uncertain: false,
+        retryable: false,
+      });
+    }
     return {
       estado: result.aceptado ? 'COMPLETADO' : 'RECHAZADO',
       estadoFiscal: result.estado,
@@ -230,6 +310,7 @@ export function createSunatProvider(
         codigo: result.codigo.slice(0, 20),
         descripcion: result.descripcion.slice(0, 2000),
         fechaRespuesta: new Date(row.fecha_respuesta).toISOString(),
+        observaciones: result.observaciones,
       },
       documentos: result.cdrXml
         ? [
@@ -318,6 +399,11 @@ export function createSunatProvider(
     // HACE: relee el diario, prepara solo si falta la solicitud y envia una sola vez.
     // CONTINUA EN: consultarResultado(), prepareRequest() y sendPreparedRequest().
     async solicitarEmision(payload, id) {
+      if (payload.tipoComprobante === 'BOLETA' && config.environment === 'production')
+        throw new ProviderError(
+          'La boleta requiere Resumen Diario SUNAT; el envio individual esta bloqueado en produccion.',
+          { uncertain: false, retryable: false },
+        );
       const previous = await consultarResultado(id);
       if (previous) return previous;
       const row = await prepareRequest(payload, id);

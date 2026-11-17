@@ -17,6 +17,7 @@ const resultSchema = z
         codigo: z.string().min(1).max(20),
         descripcion: z.string().min(1).max(2000),
         fechaRespuesta: z.iso.datetime(),
+        observaciones: z.array(z.string().max(2000)).max(100).default([]),
       })
       .strict(),
     documentos: z

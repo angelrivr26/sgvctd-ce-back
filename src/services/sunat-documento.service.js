@@ -109,18 +109,18 @@ export function signUblXml(xml, { privateKey, certificate }) {
 }
 
 const taxes = {
-  GRAVADO: { reason: '10', id: '1000', name: 'IGV', type: 'VAT' },
-  EXONERADO: { reason: '20', id: '9997', name: 'EXO', type: 'VAT' },
-  INAFECTO: { reason: '30', id: '9998', name: 'INA', type: 'FRE' },
+  GRAVADO: { category: 'S', reason: '10', id: '1000', name: 'IGV', type: 'VAT' },
+  EXONERADO: { category: 'E', reason: '20', id: '9997', name: 'EXO', type: 'VAT' },
+  INAFECTO: { category: 'O', reason: '30', id: '9998', name: 'INA', type: 'FRE' },
 };
 const amount = (value) => `${value / 100n}.${String(value % 100n).padStart(2, '0')}`;
 const reject = (message) => {
   throw new ProviderError(message, { retryable: false });
 };
 const scheme = (tax) =>
-  `<cac:TaxScheme><cbc:ID>${tax.id}</cbc:ID><cbc:Name>${tax.name}</cbc:Name><cbc:TaxTypeCode>${tax.type}</cbc:TaxTypeCode></cac:TaxScheme>`;
+  `<cac:TaxScheme><cbc:ID schemeID="UN/ECE 5153" schemeName="Tax Scheme Identifier" schemeAgencyName="United Nations Economic Commission for Europe">${tax.id}</cbc:ID><cbc:Name>${tax.name}</cbc:Name><cbc:TaxTypeCode>${tax.type}</cbc:TaxTypeCode></cac:TaxScheme>`;
 const subtotal = (line, withReason = false) =>
-  `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="PEN">${amount(line.base)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="PEN">${amount(line.tax)}</cbc:TaxAmount><cac:TaxCategory>${withReason ? `<cbc:Percent>${line.percent}</cbc:Percent><cbc:TaxExemptionReasonCode>${line.scheme.reason}</cbc:TaxExemptionReasonCode>` : ''}${scheme(line.scheme)}</cac:TaxCategory></cac:TaxSubtotal>`;
+  `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="PEN">${amount(line.base)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="PEN">${amount(line.tax)}</cbc:TaxAmount><cac:TaxCategory><cbc:ID schemeID="UN/ECE 5305" schemeName="Tax Category Identifier" schemeAgencyName="United Nations Economic Commission for Europe">${line.scheme.category}</cbc:ID>${withReason ? `<cbc:Percent>${line.percent}</cbc:Percent><cbc:TaxExemptionReasonCode listAgencyName="PE:SUNAT" listName="SUNAT:Codigo de Tipo de Afectacion del IGV" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo07">${line.scheme.reason}</cbc:TaxExemptionReasonCode>` : ''}${scheme(line.scheme)}</cac:TaxCategory></cac:TaxSubtotal>`;
 
 function prepareLine(item, config) {
   const affectation = item.afectacion === 'POR_DEFINIR' ? config.undefinedTax : item.afectacion;
@@ -175,7 +175,17 @@ function formatLimaTime(now) {
 }
 
 function buildParty(name, documentType, number, address, config, issuer = false) {
-  return `<cac:Party><cac:PartyIdentification><cbc:ID schemeID="${documentType}">${x(number)}</cbc:ID></cac:PartyIdentification><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${address ? `<cac:RegistrationAddress>${issuer ? `<cbc:AddressTypeCode>${config.localCode}</cbc:AddressTypeCode>` : ''}<cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>` : ''}</cac:PartyLegalEntity></cac:Party>`;
+  const documentAttributes =
+    `schemeID="${documentType}" schemeName="SUNAT:Identificador de Documento de Identidad" ` +
+    'schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"';
+  const fiscalAddress = issuer
+    ? `<cac:RegistrationAddress><cbc:AddressTypeCode>${config.localCode}</cbc:AddressTypeCode></cac:RegistrationAddress>`
+    : '';
+  const legalAddress = address
+    ? `<cac:RegistrationAddress><cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>`
+    : '';
+
+  return `<cac:Party><cac:PartyTaxScheme><cbc:RegistrationName>${x(name)}</cbc:RegistrationName><cbc:CompanyID ${documentAttributes}>${x(number)}</cbc:CompanyID>${fiscalAddress}<cac:TaxScheme><cbc:ID>-</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${legalAddress}</cac:PartyLegalEntity></cac:Party>`;
 }
 
 function buildInvoiceLine(line, index) {
@@ -188,7 +198,7 @@ function buildInvoiceLine(line, index) {
       ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:AllowanceChargeReasonCode>00</cbc:AllowanceChargeReasonCode><cbc:Amount currencyID="PEN">${item.descuento}</cbc:Amount><cbc:BaseAmount currencyID="PEN">${amount(BigInt(item.cantidad) * cents(item.precioUnitario))}</cbc:BaseAmount></cac:AllowanceCharge>`
       : '';
 
-  return `<cac:InvoiceLine><cbc:ID>${index + 1}</cbc:ID><cbc:InvoicedQuantity unitCode="NIU">${item.cantidad}</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="PEN">${amount(line.base)}</cbc:LineExtensionAmount><cac:PricingReference><cac:AlternativeConditionPrice><cbc:PriceAmount currencyID="PEN">${price}</cbc:PriceAmount><cbc:PriceTypeCode>01</cbc:PriceTypeCode></cac:AlternativeConditionPrice></cac:PricingReference>${allowance}<cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${item.impuesto}</cbc:TaxAmount>${subtotal(line, true)}</cac:TaxTotal><cac:Item><cbc:Description>${x(item.descripcion)}</cbc:Description><cac:SellersItemIdentification><cbc:ID>${index + 1}</cbc:ID></cac:SellersItemIdentification></cac:Item><cac:Price><cbc:PriceAmount currencyID="PEN">${item.precioUnitario}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+  return `<cac:InvoiceLine><cbc:ID>${index + 1}</cbc:ID><cbc:InvoicedQuantity unitCode="NIU" unitCodeListID="UN/ECE rec 20" unitCodeListAgencyName="United Nations Economic Commission for Europe">${item.cantidad}</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="PEN">${amount(line.base)}</cbc:LineExtensionAmount><cac:PricingReference><cac:AlternativeConditionPrice><cbc:PriceAmount currencyID="PEN">${price}</cbc:PriceAmount><cbc:PriceTypeCode listName="SUNAT:Indicador de Tipo de Precio" listAgencyName="PE:SUNAT" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo16">01</cbc:PriceTypeCode></cac:AlternativeConditionPrice></cac:PricingReference>${allowance}<cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${item.impuesto}</cbc:TaxAmount>${subtotal(line, true)}</cac:TaxTotal><cac:Item><cbc:Description>${x(item.descripcion)}</cbc:Description><cac:SellersItemIdentification><cbc:ID>${index + 1}</cbc:ID></cac:SellersItemIdentification></cac:Item><cac:Price><cbc:PriceAmount currencyID="PEN">${item.precioUnitario}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
 }
 
 /** Genera la misma UBL para beta o produccion; ambiente, series y local provienen de .env. */
@@ -223,8 +233,9 @@ export function createSunatRequest(input, config, { numero, now = new Date() }) 
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
 <ext:UBLExtensions><ext:UBLExtension><ext:ExtensionContent/></ext:UBLExtension></ext:UBLExtensions>
 <cbc:UBLVersionID>2.1</cbc:UBLVersionID><cbc:CustomizationID>2.0</cbc:CustomizationID>
+<cbc:ProfileID schemeName="SUNAT:Identificador de Tipo de Operacion" schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo17">0101</cbc:ProfileID>
 <cbc:ID>${referencia}</cbc:ID><cbc:IssueDate>${fecha}</cbc:IssueDate><cbc:IssueTime>${hora}</cbc:IssueTime>
-<cbc:InvoiceTypeCode listID="0101">${code}</cbc:InvoiceTypeCode>${warning}<cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode><cbc:LineCountNumeric>${lines.length}</cbc:LineCountNumeric>
+<cbc:InvoiceTypeCode listAgencyName="PE:SUNAT" listName="SUNAT:Identificador de Tipo de Documento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo01">${code}</cbc:InvoiceTypeCode>${warning}<cbc:DocumentCurrencyCode listID="ISO 4217 Alpha" listName="Currency" listAgencyName="United Nations Economic Commission for Europe">PEN</cbc:DocumentCurrencyCode><cbc:LineCountNumeric>${lines.length}</cbc:LineCountNumeric>
 <cac:Signature><cbc:ID>SignatureSP</cbc:ID><cac:SignatoryParty><cac:PartyIdentification><cbc:ID>${payload.emisor.ruc}</cbc:ID></cac:PartyIdentification><cac:PartyName><cbc:Name>${x(payload.emisor.razonSocial)}</cbc:Name></cac:PartyName></cac:SignatoryParty><cac:DigitalSignatureAttachment><cac:ExternalReference><cbc:URI>#SignatureSP</cbc:URI></cac:ExternalReference></cac:DigitalSignatureAttachment></cac:Signature>
 <cac:AccountingSupplierParty>${buildParty(payload.emisor.razonSocial, '6', payload.emisor.ruc, payload.emisor.direccion, config, true)}</cac:AccountingSupplierParty>
 <cac:AccountingCustomerParty>${buildParty(payload.comprador.nombre, docType, payload.comprador.numeroDocumento, payload.comprador.direccion, config)}</cac:AccountingCustomerParty>

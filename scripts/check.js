@@ -76,6 +76,14 @@ assert.throws(
   () => parseSunatConfig({ ...sunatEnv, SUNAT_URL: 'http://example.test' }),
   /SUNAT_URL debe usar HTTPS/,
 );
+assert.throws(
+  () => parseSunatConfig({ ...sunatEnv, SUNAT_SERIE_FACTURA: 'B001' }),
+  /SUNAT_SERIE_FACTURA debe iniciar con F/,
+);
+assert.throws(
+  () => parseSunatConfig({ ...sunatEnv, SUNAT_SERIE_BOLETA: 'F001' }),
+  /SUNAT_SERIE_BOLETA debe iniciar con B/,
+);
 // La configuracion se carga sin certificados; el servicio los exige antes de firmar.
 for (const paths of [
   {},
