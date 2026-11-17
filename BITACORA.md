@@ -808,3 +808,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** SUNAT beta devolvio el codigo `1008` para la compra 57976 porque la adecuacion anterior habia reemplazado ese nodo en lugar de conservarlo junto con `PartyTaxScheme`.
 - **Validacion:** la prueba de contrato comprueba la ruta completa `AccountingSupplierParty/Party/PartyIdentification/ID`, el RUC ficticio y el tipo de documento 6; se ejecutaron las pruebas y verificaciones del proyecto.
 - **Limitaciones:** el intento fallido de la compra 57976 conserva el XML y la respuesta SOAP anteriores como evidencia. Para probar la correccion debe generarse una nueva solicitud fiscal controlada; no se debe reenviar el XML guardado.
+
+# Tipo de operacion en reglas SUNAT vigentes (2026-11-16)
+
+- **Alcance:** `InvoiceTypeCode` conserva los atributos del catalogo 01 y agrega `listID="0101"`, `name="Tipo de Operacion"` y `listSchemeURI` del catalogo 51. Se mantiene `ProfileID` para conservar compatibilidad con la guia UBL 2.1.
+- **Motivo:** SUNAT beta devolvio la excepcion `3205`, cuya regla vigente comprueba que `/Invoice/cbc:InvoiceTypeCode@listID` exista y no este vacio. La adecuacion anterior habia interpretado `listID` como un atributo incorrecto y lo retiro.
+- **Validacion:** la prueba de contrato exige en un mismo `InvoiceTypeCode` el tipo de operacion `0101`, los atributos del catalogo 51, los atributos del catalogo 01 y el tipo de comprobante `03`; pruebas y comprobaciones del proyecto aprobadas.
+- **Limitaciones:** los intentos ya persistidos conservan su XML anterior. La comprobacion definitiva requiere una nueva solicitud a SUNAT beta despues de desplegar esta version.
