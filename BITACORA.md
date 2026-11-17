@@ -815,3 +815,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** SUNAT beta devolvio la excepcion `3205`, cuya regla vigente comprueba que `/Invoice/cbc:InvoiceTypeCode@listID` exista y no este vacio. La adecuacion anterior habia interpretado `listID` como un atributo incorrecto y lo retiro.
 - **Validacion:** la prueba de contrato exige en un mismo `InvoiceTypeCode` el tipo de operacion `0101`, los atributos del catalogo 51, los atributos del catalogo 01 y el tipo de comprobante `03`; pruebas y comprobaciones del proyecto aprobadas.
 - **Limitaciones:** los intentos ya persistidos conservan su XML anterior. La comprobacion definitiva requiere una nueva solicitud a SUNAT beta despues de desplegar esta version.
+
+# Local anexo del emisor en UBL vigente (2026-11-16)
+
+- **Alcance:** el codigo de local se incorpora en `PartyLegalEntity/RegistrationAddress/AddressTypeCode`, con `listAgencyName="PE:SUNAT"` y `listName="Establecimientos anexos"`. Se conserva tambien en `PartyTaxScheme` por compatibilidad con la guia UBL anterior.
+- **Motivo:** SUNAT beta devolvio `3030`; la regla vigente busca el codigo en `PartyLegalEntity`, mientras la guia historica lo mostraba dentro de `PartyTaxScheme`.
+- **Validacion:** la prueba de contrato verifica la ruta completa vigente, los atributos SUNAT y el valor configurado `0000`; pruebas y comprobaciones del proyecto aprobadas.
+- **Limitaciones:** `0000` representa el domicilio fiscal o un lugar de venta no determinado. En produccion debe configurarse el codigo de cuatro digitos declarado para el establecimiento real cuando corresponda.

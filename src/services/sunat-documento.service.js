@@ -178,12 +178,16 @@ function buildParty(name, documentType, number, address, config, issuer = false)
   const documentAttributes =
     `schemeID="${documentType}" schemeName="SUNAT:Identificador de Documento de Identidad" ` +
     'schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo06"';
+  const localCode = issuer
+    ? `<cbc:AddressTypeCode listAgencyName="PE:SUNAT" listName="Establecimientos anexos">${config.localCode}</cbc:AddressTypeCode>`
+    : '';
   const fiscalAddress = issuer
-    ? `<cac:RegistrationAddress><cbc:AddressTypeCode>${config.localCode}</cbc:AddressTypeCode></cac:RegistrationAddress>`
+    ? `<cac:RegistrationAddress>${localCode}</cac:RegistrationAddress>`
     : '';
-  const legalAddress = address
-    ? `<cac:RegistrationAddress><cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>`
-    : '';
+  const legalAddress =
+    address || issuer
+      ? `<cac:RegistrationAddress>${localCode}${address ? `<cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode listID="ISO 3166-1" listAgencyName="United Nations Economic Commission for Europe" listName="Country">PE</cbc:IdentificationCode></cac:Country>` : ''}</cac:RegistrationAddress>`
+      : '';
 
   const identification = `<cac:PartyIdentification><cbc:ID ${documentAttributes}>${x(number)}</cbc:ID></cac:PartyIdentification>`;
 
