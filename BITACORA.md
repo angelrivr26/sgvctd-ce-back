@@ -1,5 +1,12 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-16 - Configuracion SUNAT por URL
+
+- Alcance: se retiro `SUNAT_ENV`. La aplicacion toma el destino exclusivamente de `SUNAT_URL`: beta en desarrollo y produccion en el despliegue segun la URL configurada. La etiqueta interna necesaria para las reglas tecnicas de beta se deriva de la URL de SUNAT, sin exigir otra variable de entorno.
+- Motivo: eliminar una seleccion duplicada que podia diferir de la URL efectivamente desplegada y simplificar la configuracion.
+- Validacion: `npm test` aprobo 25 de 25 pruebas y `npm run check` verifico sintaxis, configuracion SUNAT y archivos de entorno.
+- Limitacion: la deteccion automatica de beta reconoce el host oficial `e-beta.sunat.gob.pe`; una URL alternativa de beta requiere conservar el host oficial o adaptar esa regla tecnica.
+
 ## 2026-11-15 - Separacion segura de correo local y desplegado
 
 - Alcance: `MAIL_MODE` pasa a ser obligatorio y Docker Compose carga exclusivamente `.env`, sin
@@ -710,3 +717,80 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** evitar que una configuración ausente cambie silenciosamente a captura local; `env.js` ya valida que el modo sea explícito.
 - **Validación:** pruebas automatizadas, verificación sintáctica y revisión del flujo `.env` → `env.js` → `composition.js` → `correo.service.js`.
 - **Limitaciones:** las credenciales permanecen fuera del código JavaScript y deben existir en el `.env` operativo de cada contenedor.
+
+# Paso 1: configuracion SUNAT explicita (2026-11-16)
+
+- **Alcance:** `parseSunatConfig()` lee ambiente, URL, usuario, clave, series y codigo de local del entorno, sin reemplazarlos por datos beta. Los campos obligatorios se leen y validan en una sola asignacion. Se actualizan `.env.example`, README, el aviso de `setup:local` y las comprobaciones de configuracion. Se excluye `.env` de Git y se retira del indice conservando el archivo local. En el entorno local beta se trasladan al `.env` los cinco valores que antes aportaba el codigo; no se sobrescriben valores configurados.
+- **Motivo:** evitar que variables ausentes pasen inadvertidas en local gracias a valores incrustados en JavaScript y fallen al desplegar. La precedencia sigue siendo overrides > entorno del proceso > `.env`. Se conservan los valores tecnicos predeterminados (timeout y directorios) y las validaciones de formato, HTTPS y certificados.
+- **Validacion:** `npm test` aprobado: 25 pruebas de negocio, contratos, concurrencia, recuperacion, documentos y correo, con `COMPROBANTES_SKIP_ENV=1`. `npm run check` aprobado: sintaxis de 54 archivos, lectura de valores explicitos y rechazo de cada variable ausente/vacia en beta y produccion, HTTPS y certificados requeridos. Carga local con `loadConfig()` correcta sin abrir conexiones. Formato de los archivos JavaScript y Markdown modificados y `git diff --check` verificados; `.env` permanece en disco y Git lo ignora.
+- **Limitaciones:** cada despliegue debe proveer las variables antes de iniciar y reiniciar/recrear el proceso/contenedor tras cambiarlas. La exclusion de `.env` no elimina versiones anteriores del historial. `tests/` ya estaba ignorado por el repositorio; la adaptacion de las pruebas de correo es local, y las nuevas comprobaciones SUNAT quedan versionadas en `scripts/check.js`. Sin cambios de dependencias, servicios de procesamiento ni reglas contables; no se prueba emision ni entrega reales.
+
+# Archivo separado de produccion (2026-11-16)
+
+- **Alcance:** plantilla `.env.production.example` sin secretos y copia operativa `.env.production` excluida de Git y del contexto Docker. La API y el diagnostico seleccionan el archivo mediante `COMPROBANTES_ENV_FILE`; Compose usa la misma variable. Comandos `start:prod`, `worker:prod` y `sunat:diagnostico:prod` cargan explicitamente `.env.production`. `.env` local permanece en disco y conserva sus valores.
+- **Motivo:** permitir valores distintos por ambiente sin editar el codigo ni mezclar produccion con el archivo local. La eliminacion de `.env` mostrada por Git corresponde a su retirada del indice, no a su borrado del disco.
+- **Validacion:** `npm test` aprobado (25 pruebas, sin cargar el entorno operativo); `npm run check` aprobado (55 archivos y escenarios aislados de seleccion local/produccion, uso del mismo archivo por el diagnostico, prioridad del entorno del servidor, ausencia de mezcla con `.env` y fallo al faltar el archivo seleccionado). Formato y `git diff --check` correctos. `.env` y `.env.production` existen y Git los ignora; la plantilla de produccion queda visible para versionar.
+- **Limitaciones:** faltan los valores privados de produccion, que debe completar el responsable del despliegue. Docker no esta instalado en este entorno: no se ejecuto Compose ni un despliegue. No se inicia la API ni se contacta SUNAT, PostgreSQL o SMTP reales. El servidor debe provisionar certificados y persistencia documental. Sin cambios de dependencias ni lockfile.
+
+# Una sola variable SUNAT_URL (2026-11-16)
+
+- **Alcance:** `parseSunatConfig()` lee directamente `SUNAT_URL`, eliminando la seleccion entre dos nombres de variable. Se actualizan las plantillas, los archivos operativos locales, README y las comprobaciones de configuracion. Se conserva la URL configurada para cada ambiente y no se modifican credenciales.
+- **Motivo:** el archivo seleccionado para cada despliegue ya determina los valores; no se necesita otra seleccion de URL en JavaScript.
+- **Validacion:** `npm test` aprobado (25 pruebas con el entorno operativo deshabilitado); `npm run check` aprobado (55 archivos y seleccion de URL local/produccion tanto para API como diagnostico). Carga local correcta con `SUNAT_URL`; migracion de ambos archivos verificada conservando sus URL. Formato y `git diff --check` correctos. Sin referencias activas a los nombres anteriores; se conserva el historial de esta bitacora.
+- **Limitaciones:** otros servidores deben renombrar su variable a `SUNAT_URL` antes de actualizar. `SUNAT_ENV` se conserva para las reglas de beta/produccion, certificados y marcado de documentos. Sin cambios de dependencias ni envios reales.
+
+# URL SUNAT definida por el despliegue (2026-11-16)
+
+- **Alcance:** se elimina la restriccion que obligaba a usar `SUNAT_ENV=production` cuando `NODE_ENV=production`. La URL se toma directamente de `SUNAT_URL` del entorno seleccionado. Se confirma que `.env` contiene la URL beta y `.env.production` la productiva, sin modificar esos archivos.
+- **Motivo:** el despliegue debe decidir los valores; el modo de ejecucion de Node no debe seleccionar el destino SUNAT ni impedir usar beta en un contenedor de pruebas.
+- **Validacion:** `npm test` aprobado (25 pruebas); `npm run check` aprobado (55 archivos y comprobacion aislada de `NODE_ENV=production` con SUNAT beta, conservando la URL y la configuracion del archivo local). Formato y `git diff --check` correctos. Se verificaron las URL de ambos archivos operativos sin mostrar credenciales.
+- **Limitaciones:** `SUNAT_ENV` sigue identificando las reglas de certificados y el marcado de documentos beta; no selecciona la URL. Se conservan esas reglas para no alterar la generacion de documentos de prueba. No se despliega ni se realizan envios reales; sin cambios de dependencias.
+
+# Simplificacion de la comprobacion de certificados (2026-11-16)
+
+- **Alcance:** se eliminan `const beta` y la comprobacion de rutas de certificados de `parseSunatConfig()`. `loadSunatCertificate()` ya comprueba ambas rutas al preparar la firma. `SUNAT_URL` sigue leyendose directamente y conserva el requisito HTTPS.
+- **Motivo:** evitar una comprobacion duplicada y separar la lectura de configuracion de la preparacion de certificados. HTTPS impide configurar el envio de credenciales por HTTP sin cifrar; no selecciona el ambiente.
+- **Validacion:** `npm test` aprobado (25 pruebas); `npm run check` aprobado (55 archivos), incluidos los casos de ambas rutas ausentes y de certificado o clave ausentes en produccion: la configuracion carga y el servicio de certificados rechaza la preparacion. Formato y `git diff --check` correctos.
+- **Limitaciones:** la ausencia de rutas ya no bloquea cargar la configuracion; se detecta al preparar la firma, antes del envio. `SUNAT_ENV` mantiene sus valores admitidos y su uso en el marcado beta y las reglas del proveedor. Sin cambios de credenciales, dependencias ni llamadas reales a servicios externos.
+
+# Confirmacion del archivo local SUNAT (2026-11-16)
+
+- **Alcance:** se guarda `.env` con una unica declaracion `SUNAT_URL` apuntando a beta, sin `SUNAT_BETA_URL` ni `SUNAT_PRODUCTION_URL`. El archivo en disco ya contenia esa configuracion; se vuelve a guardar por solicitud del usuario.
+- **Motivo:** asegurar que el archivo local coincide con el nombre de variable usado por el codigo.
+- **Validacion:** comprobacion automatica de URL beta y ausencia de nombres anteriores; comparacion de las demas variables antes y despues sin cambios. `npm test` aprobado (25 pruebas) y `npm run check` aprobado (55 archivos y seleccion de configuracion).
+- **Limitaciones:** no se controla el contenido sin guardar de las pestañas del editor. No se modifica produccion ni se realizan conexiones externas; `.env` permanece fuera de Git.
+
+# Plantilla de desarrollo sin valores (2026-11-16)
+
+- **Alcance:** `.env.example` conserva los nombres de variables y comentarios con todos los valores vacios. Se verifica que `.env` tiene los datos requeridos para su configuracion de BD, SUNAT beta, correo y acceso. Se agregan vacios cuatro campos opcionales ausentes: nombre y direccion del encabezado PDF, certificado y clave privada SUNAT. Se conservan todos los valores locales existentes y se aclara el uso de la plantilla en README y `setup:local`.
+- **Motivo:** concentrar los valores operativos de desarrollo en `.env` y mantener `.env.example` solo como lista de campos por completar.
+- **Validacion:** variables requeridas presentes, URL beta correcta, 48 valores de plantilla vacios y conservacion de los valores existentes. `npm test` aprobado (25 pruebas); `npm run check` aprobado (55 archivos y escenarios de configuracion); carga local correcta sin conexiones. Formato y `git diff --check` correctos.
+- **Limitaciones:** verificar presencia y carga no comprueba conectividad ni vigencia de credenciales. Los campos PDF agregados permanecen vacios; en beta se mantiene la generacion local de certificados. Una instalacion nueva debe completar la plantilla, incluidos campos numericos, antes de arrancar. No se modifica produccion ni se contactan servicios externos.
+
+# Retiro de la plantilla adicional de produccion (2026-11-16)
+
+- **Alcance:** se elimina `.env.production.example` y su excepcion generica en `.gitignore`. README indica el uso directo de `.env.production`. Se conserva el contenido de `.env`, `.env.production` y `.env.example`.
+- **Motivo:** reducir archivos de configuracion a solicitud del usuario; el despliegue ya lee `.env.production` y no necesita otra plantilla.
+- **Validacion:** referencias revisadas; ausencia de la plantilla y presencia de los tres archivos conservados verificadas. `npm test` aprobado (25 pruebas), `npm run check` aprobado (55 archivos y escenarios de configuracion) y `git diff --check` correcto.
+- **Limitaciones:** `.env.production` permanece excluido de Git y debe provisionarse en cada servidor. Las entradas anteriores de esta bitacora conservan el historial del archivo retirado. Sin cambios de comportamiento, credenciales ni dependencias.
+
+# Simplificacion de receive() en comprobantes.service.js (2026-11-16)
+
+- **Alcance:** se reemplazan cuatro comentarios de navegacion repetidos por una nota sobre el orden de validacion y guardado. El metodo y sus operaciones no cambian.
+- **Motivo:** hacer mas legible la recepcion sin quitar pasos de negocio.
+- **Validacion:** inspeccion del diff; el metodo conserva la validacion del contrato, la persistencia y la respuesta con indicador de duplicado. No se ejecutaron pruebas porque no cambia el comportamiento.
+- **Limitaciones:** no se modificaron el modelo ni el contrato HTTP; siguen para su revision en los siguientes pasos.
+
+# Restauracion del mapa de receive() (2026-11-16)
+
+- **Alcance:** se restablecen en `receive()` los comentarios de fase, llamador y continuacion, como pidio el usuario. Los pasos del metodo no cambian.
+- **Motivo:** ayudar al siguiente programador a seguir el flujo HTTP hacia el modelo y de vuelta a la respuesta 202.
+- **Validacion:** inspeccion del metodo y del comentario de flujo; sin cambio funcional ni ejecucion de pruebas.
+- **Limitaciones:** ninguna en el flujo; el siguiente paso sigue siendo revisar `model.receive()`.
+
+# Refactorizacion legible de la solicitud SUNAT (2026-11-16)
+
+- **Alcance:** `createSunatRequest()` delega la preparacion de lineas, agrupacion tributaria, fecha de Lima, participantes y detalle XML en funciones pequenas del mismo archivo.
+- **Motivo:** permitir que el flujo principal se lea en orden y que cada calculo tenga un nombre directo, sin cambiar el contrato ni introducir abstracciones nuevas.
+- **Validacion:** comparacion del XML y del resultado de la solicitud, pruebas automatizadas y verificacion sintactica del proyecto.
+- **Limitaciones:** se conserva deliberadamente el formato XML compacto, los calculos con `BigInt`, los redondeos, el orden de las validaciones y sus mensajes; no se realizan llamadas reales a SUNAT.

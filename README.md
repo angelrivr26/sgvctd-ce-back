@@ -2,7 +2,7 @@
 
 Backend asincrono de desarrollo para recibir compras pagadas desde Boletos, procesarlas contra
 SUNAT beta, generar PDF/XML/CDR y devolver el resultado. Existe un solo flujo tecnico;
-`SUNAT_ENV=beta|production` selecciona la configuracion, pero esta entrega no acredita emision
+El archivo de entorno seleccionado aporta la configuracion. Esta entrega no acredita emision
 productiva ni documentos fiscalmente validos.
 
 ## Preparacion
@@ -19,6 +19,7 @@ Antes de iniciar, el DBA debe ejecutar [sql/001_esquema.sql](sql/001_esquema.sql
 ```powershell
 npm install
 npm run setup:local
+# Completar .env con los datos de conexion y SUNAT antes de iniciar.
 npm run dev
 ```
 
@@ -26,7 +27,7 @@ npm run dev
 mismo tiempo un worker local y otro desplegado sobre la misma base. `npm run worker` se usa solo en
 un ambiente controlado con PostgreSQL.
 
-Docker Compose carga exclusivamente `.env`. Para desarrollo use `MAIL_MODE=capture`; para envio
+Docker Compose carga `.env` por defecto. Para desarrollo use `MAIL_MODE=capture`; para envio
 real configure `MAIL_MODE=smtp` y todas las variables `SMTP_*` en ese mismo archivo. Si SMTP no
 responde o la configuracion esta incompleta, registra `SMTP_CONFIG_INCOMPLETA` y reintenta el
 correo sin detener el inicio de sesion, la emision fiscal ni los callbacks.
@@ -43,13 +44,54 @@ npm run sunat:diagnostico
 
 ## Configuracion SUNAT
 
-- Desarrollo: `SUNAT_ENV=beta`. Usa el usuario de pruebas MODDATOS y puede crear un certificado autofirmado local.
-- Produccion: `SUNAT_ENV=production`. Exige usuario, clave, certificado, clave privada, series y codigo de local institucionales.
-- Las URLs oficiales estan centralizadas en `src/config/sunat.js`; no se repiten en `.env`.
-- `NODE_ENV=production` exige también `SUNAT_ENV=production` para evitar un despliegue productivo apuntando a beta.
+- Desarrollo: configure `SUNAT_URL` con la URL beta y complete el usuario, la clave de pruebas, las series y el codigo de local. Puede crear un certificado autofirmado local.
+- Produccion: configure `SUNAT_URL` con la URL de produccion y complete usuario, clave, certificado, clave privada, series y codigo de local institucionales. Los certificados se comprueban al preparar la firma, antes del envio; su ausencia no impide cargar la configuracion.
+- `NODE_ENV` configura la ejecucion de Node y no selecciona ni restringe la URL SUNAT. Un contenedor con `NODE_ENV=production` puede usar beta para pruebas.
 - Al iniciar, la aplicación verifica en modo lectura que el DBA haya creado todas las tablas y la secuencia requeridas.
 
 Consulte [.env.example](.env.example) para todas las variables.
+
+`.env.example` contiene los nombres con valores vacios; no se carga al ejecutar la aplicacion.
+Los valores de desarrollo se completan en `.env`. `setup:local` copia esa plantilla y genera
+las claves de acceso, pero requiere completar la configuracion antes de iniciar, incluidos los
+campos numericos de puertos, tiempos y concurrencia. Si `.env` ya existe, no lo sobrescribe.
+
+La precedencia es: valores proporcionados por las pruebas, entorno del proceso y archivo seleccionado.
+SUNAT requiere ambiente, URL, usuario, clave, series y codigo de local explicitos; si falta alguno,
+el arranque indica el nombre de la variable. Solo los ajustes tecnicos, como el timeout, conservan
+valores predeterminados. `.env` es local y no se versiona: debe provisionarse antes de iniciar cada
+despliegue. Si cambia, reinicie el proceso; en Docker Compose, recree el contenedor para cargarlo.
+
+## Archivo separado para produccion
+
+Local usa `.env`. Produccion usa directamente `.env.production`, que debe provisionarse en
+cada servidor. Complete alli la conexion PostgreSQL, origen del frontend, credenciales, series,
+certificados, correo y callback con los datos de ese ambiente. Ambos archivos operativos
+estan excluidos de Git. `.env.example` se conserva como plantilla vacia para desarrollo.
+
+`.env.production` incluye `COMPROBANTES_ENV_FILE=.env.production`: Compose y los cargadores de
+configuracion usan ese archivo, sin completar campos ausentes desde `.env`. Las variables ya
+definidas en el entorno del servidor conservan prioridad; evite dejar alli valores de otro ambiente.
+
+Para desplegar con Docker Compose:
+
+```powershell
+docker compose --env-file .env.production up -d --build
+```
+
+Para ejecutar directamente con Node:
+
+```powershell
+npm run start:prod
+```
+
+Tambien existen `npm run worker:prod` y `npm run sunat:diagnostico:prod`. No ejecute el worker
+separado junto con el de la API sin configurar antes `WORKERS_ENABLED` y la concurrencia.
+El diagnostico solo consulta WSDL; no acredita emision productiva.
+
+Los certificados deben existir en las rutas configuradas. En Docker, monte los archivos en el
+contenedor y configure alli sus rutas; `.env.production` no monta archivos ni configura persistencia
+para documentos. Esos recursos deben provisionarse en el servidor antes de iniciar.
 
 ## Documentacion vigente
 

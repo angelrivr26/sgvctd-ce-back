@@ -122,55 +122,29 @@ const scheme = (tax) =>
 const subtotal = (line, withReason = false) =>
   `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="PEN">${amount(line.base)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="PEN">${amount(line.tax)}</cbc:TaxAmount><cac:TaxCategory>${withReason ? `<cbc:Percent>${line.percent}</cbc:Percent><cbc:TaxExemptionReasonCode>${line.scheme.reason}</cbc:TaxExemptionReasonCode>` : ''}${scheme(line.scheme)}</cac:TaxCategory></cac:TaxSubtotal>`;
 
-/** Genera la misma UBL para beta o produccion; ambiente, series y local provienen de .env. */
-export function createSunatRequest(input, config, { numero, now = new Date() }) {
-  // FASE 2/6: construye el UBL con los importes y afectaciones recibidos.
-  // LLAMADO POR: sunat.service.js -> prepareRequest().
-  // HACE: valida impuestos y arma Invoice UBL 2.1. No usa red ni base de datos.
-  // CONTINUA EN: signUblXml() dentro de este modulo.
-  // DENTRO: 1 compra y numero, 2 lineas e impuesto, 3 serie y fecha Lima, 4 XML de cabecera y detalle.
-  const payload = compraSchema.parse(input);
-  if (config.environment === 'beta' && payload.emisor.ruc !== '20000000001')
-    reject('SUNAT beta requiere el emisor ficticio 20000000001.');
-  if (!/^[1-9]\d{0,7}$/.test(numero)) reject('Numeracion SUNAT fuera de rango.');
-  const lines = payload.detalle.map((item) => {
-    const affectation = item.afectacion === 'POR_DEFINIR' ? config.undefinedTax : item.afectacion;
-    const taxScheme = taxes[affectation];
-    if (!taxScheme)
-      reject('La afectacion debe estar definida antes de enviar el comprobante a SUNAT.');
-    const base = BigInt(item.cantidad) * cents(item.precioUnitario) - cents(item.descuento);
-    const tax = cents(item.impuesto);
-    if (base <= 0n) reject('Las gratuidades y bases cero requieren un contrato fiscal adicional.');
-    if (affectation !== 'GRAVADO' && tax !== 0n)
-      reject('Una linea exonerada o inafecta no puede informar impuesto distinto de cero.');
-    const rate = (tax * 10000n + base / 2n) / base;
-    if (
-      affectation === 'GRAVADO' &&
-      (rate <= 0n || rate > 10000n || (base * rate + 5000n) / 10000n !== tax)
-    )
-      reject('El impuesto informado no permite una tasa porcentual consistente.');
-    return { item, affectation, base, tax, percent: amount(rate), scheme: taxScheme };
-  });
+function prepareLine(item, config) {
+  const affectation = item.afectacion === 'POR_DEFINIR' ? config.undefinedTax : item.afectacion;
+  const taxScheme = taxes[affectation];
+  if (!taxScheme)
+    reject('La afectacion debe estar definida antes de enviar el comprobante a SUNAT.');
 
-  const serie = payload.tipoComprobante === 'FACTURA' ? config.invoiceSeries : config.receiptSeries;
-  const code = payload.tipoComprobante === 'FACTURA' ? '01' : '03';
-  const referencia = `${serie}-${numero}`;
-  const fecha = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Lima',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-  const hora = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Lima',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).format(now);
-  const docType = { RUC: '6', DNI: '1', CE: '4', PASAPORTE: '7', OTRO: '0' }[
-    payload.comprador.tipoDocumento
-  ];
+  const base = BigInt(item.cantidad) * cents(item.precioUnitario) - cents(item.descuento);
+  const tax = cents(item.impuesto);
+  if (base <= 0n) reject('Las gratuidades y bases cero requieren un contrato fiscal adicional.');
+  if (affectation !== 'GRAVADO' && tax !== 0n)
+    reject('Una linea exonerada o inafecta no puede informar impuesto distinto de cero.');
+
+  const rate = (tax * 10000n + base / 2n) / base;
+  if (
+    affectation === 'GRAVADO' &&
+    (rate <= 0n || rate > 10000n || (base * rate + 5000n) / 10000n !== tax)
+  )
+    reject('El impuesto informado no permite una tasa porcentual consistente.');
+
+  return { item, affectation, base, tax, percent: amount(rate), scheme: taxScheme };
+}
+
+function groupLinesByTax(lines) {
   const grouped = new Map();
   for (const line of lines) {
     const group = grouped.get(line.affectation) ?? { ...line, base: 0n, tax: 0n };
@@ -178,10 +152,69 @@ export function createSunatRequest(input, config, { numero, now = new Date() }) 
     group.tax += line.tax;
     grouped.set(line.affectation, group);
   }
+  return grouped;
+}
+
+function formatLimaDate(now) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+function formatLimaTime(now) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Lima',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(now);
+}
+
+function buildParty(name, documentType, number, address, config, issuer = false) {
+  return `<cac:Party><cac:PartyIdentification><cbc:ID schemeID="${documentType}">${x(number)}</cbc:ID></cac:PartyIdentification><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${address ? `<cac:RegistrationAddress>${issuer ? `<cbc:AddressTypeCode>${config.localCode}</cbc:AddressTypeCode>` : ''}<cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>` : ''}</cac:PartyLegalEntity></cac:Party>`;
+}
+
+function buildInvoiceLine(line, index) {
+  const { item } = line;
+  const priceScaled =
+    (cents(item.total) * 100000000n + BigInt(item.cantidad) / 2n) / BigInt(item.cantidad);
+  const price = `${priceScaled / 10000000000n}.${String(priceScaled % 10000000000n).padStart(10, '0')}`;
+  const allowance =
+    cents(item.descuento) > 0n
+      ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:AllowanceChargeReasonCode>00</cbc:AllowanceChargeReasonCode><cbc:Amount currencyID="PEN">${item.descuento}</cbc:Amount><cbc:BaseAmount currencyID="PEN">${amount(BigInt(item.cantidad) * cents(item.precioUnitario))}</cbc:BaseAmount></cac:AllowanceCharge>`
+      : '';
+
+  return `<cac:InvoiceLine><cbc:ID>${index + 1}</cbc:ID><cbc:InvoicedQuantity unitCode="NIU">${item.cantidad}</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="PEN">${amount(line.base)}</cbc:LineExtensionAmount><cac:PricingReference><cac:AlternativeConditionPrice><cbc:PriceAmount currencyID="PEN">${price}</cbc:PriceAmount><cbc:PriceTypeCode>01</cbc:PriceTypeCode></cac:AlternativeConditionPrice></cac:PricingReference>${allowance}<cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${item.impuesto}</cbc:TaxAmount>${subtotal(line, true)}</cac:TaxTotal><cac:Item><cbc:Description>${x(item.descripcion)}</cbc:Description><cac:SellersItemIdentification><cbc:ID>${index + 1}</cbc:ID></cac:SellersItemIdentification></cac:Item><cac:Price><cbc:PriceAmount currencyID="PEN">${item.precioUnitario}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+}
+
+/** Genera la misma UBL para beta o produccion; ambiente, series y local provienen de .env. */
+export function createSunatRequest(input, config, { numero, now = new Date() }) {
+  // FASE 2/6: construye el UBL con los importes y afectaciones recibidos.
+  // LLAMADO POR: sunat.service.js -> prepareRequest().
+  // HACE: valida impuestos y arma Invoice UBL 2.1. No usa red ni base de datos.
+  // CONTINUA EN: signUblXml() dentro de este modulo.
+  // DENTRO: valida la compra, prepara las lineas y finalmente arma el XML.
+  const payload = compraSchema.parse(input);
+  if (config.environment === 'beta' && payload.emisor.ruc !== '20000000001')
+    reject('SUNAT beta requiere el emisor ficticio 20000000001.');
+  if (!/^[1-9]\d{0,7}$/.test(numero)) reject('Numeracion SUNAT fuera de rango.');
+  const lines = payload.detalle.map((item) => prepareLine(item, config));
+
+  const serie = payload.tipoComprobante === 'FACTURA' ? config.invoiceSeries : config.receiptSeries;
+  const code = payload.tipoComprobante === 'FACTURA' ? '01' : '03';
+  const referencia = `${serie}-${numero}`;
+  const fecha = formatLimaDate(now);
+  const hora = formatLimaTime(now);
+  const docType = { RUC: '6', DNI: '1', CE: '4', PASAPORTE: '7', OTRO: '0' }[
+    payload.comprador.tipoDocumento
+  ];
+  const grouped = groupLinesByTax(lines);
   const totalTax = lines.reduce((sum, line) => sum + line.tax, 0n);
   const totalBase = lines.reduce((sum, line) => sum + line.base, 0n);
-  const party = (name, documentType, number, address, issuer = false) =>
-    `<cac:Party><cac:PartyIdentification><cbc:ID schemeID="${documentType}">${x(number)}</cbc:ID></cac:PartyIdentification><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${address ? `<cac:RegistrationAddress>${issuer ? `<cbc:AddressTypeCode>${config.localCode}</cbc:AddressTypeCode>` : ''}<cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>` : ''}</cac:PartyLegalEntity></cac:Party>`;
   const warning =
     config.environment === 'beta'
       ? '<cbc:Note>SOLO PRUEBA SUNAT BETA - SIN VALIDEZ TRIBUTARIA</cbc:Note>'
@@ -193,24 +226,12 @@ export function createSunatRequest(input, config, { numero, now = new Date() }) 
 <cbc:ID>${referencia}</cbc:ID><cbc:IssueDate>${fecha}</cbc:IssueDate><cbc:IssueTime>${hora}</cbc:IssueTime>
 <cbc:InvoiceTypeCode listID="0101">${code}</cbc:InvoiceTypeCode>${warning}<cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode><cbc:LineCountNumeric>${lines.length}</cbc:LineCountNumeric>
 <cac:Signature><cbc:ID>SignatureSP</cbc:ID><cac:SignatoryParty><cac:PartyIdentification><cbc:ID>${payload.emisor.ruc}</cbc:ID></cac:PartyIdentification><cac:PartyName><cbc:Name>${x(payload.emisor.razonSocial)}</cbc:Name></cac:PartyName></cac:SignatoryParty><cac:DigitalSignatureAttachment><cac:ExternalReference><cbc:URI>#SignatureSP</cbc:URI></cac:ExternalReference></cac:DigitalSignatureAttachment></cac:Signature>
-<cac:AccountingSupplierParty>${party(payload.emisor.razonSocial, '6', payload.emisor.ruc, payload.emisor.direccion, true)}</cac:AccountingSupplierParty>
-<cac:AccountingCustomerParty>${party(payload.comprador.nombre, docType, payload.comprador.numeroDocumento, payload.comprador.direccion)}</cac:AccountingCustomerParty>
+<cac:AccountingSupplierParty>${buildParty(payload.emisor.razonSocial, '6', payload.emisor.ruc, payload.emisor.direccion, config, true)}</cac:AccountingSupplierParty>
+<cac:AccountingCustomerParty>${buildParty(payload.comprador.nombre, docType, payload.comprador.numeroDocumento, payload.comprador.direccion, config)}</cac:AccountingCustomerParty>
 <cac:PaymentTerms><cbc:ID>FormaPago</cbc:ID><cbc:PaymentMeansID>Contado</cbc:PaymentMeansID></cac:PaymentTerms>
 <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${amount(totalTax)}</cbc:TaxAmount>${[...grouped.values()].map((line) => subtotal(line)).join('')}</cac:TaxTotal>
 <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="PEN">${amount(totalBase)}</cbc:LineExtensionAmount><cbc:TaxInclusiveAmount currencyID="PEN">${payload.total}</cbc:TaxInclusiveAmount><cbc:PayableAmount currencyID="PEN">${payload.total}</cbc:PayableAmount></cac:LegalMonetaryTotal>
-${lines
-  .map((line, index) => {
-    const { item } = line;
-    const priceScaled =
-      (cents(item.total) * 100000000n + BigInt(item.cantidad) / 2n) / BigInt(item.cantidad);
-    const price = `${priceScaled / 10000000000n}.${String(priceScaled % 10000000000n).padStart(10, '0')}`;
-    const allowance =
-      cents(item.descuento) > 0n
-        ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:AllowanceChargeReasonCode>00</cbc:AllowanceChargeReasonCode><cbc:Amount currencyID="PEN">${item.descuento}</cbc:Amount><cbc:BaseAmount currencyID="PEN">${amount(BigInt(item.cantidad) * cents(item.precioUnitario))}</cbc:BaseAmount></cac:AllowanceCharge>`
-        : '';
-    return `<cac:InvoiceLine><cbc:ID>${index + 1}</cbc:ID><cbc:InvoicedQuantity unitCode="NIU">${item.cantidad}</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="PEN">${amount(line.base)}</cbc:LineExtensionAmount><cac:PricingReference><cac:AlternativeConditionPrice><cbc:PriceAmount currencyID="PEN">${price}</cbc:PriceAmount><cbc:PriceTypeCode>01</cbc:PriceTypeCode></cac:AlternativeConditionPrice></cac:PricingReference>${allowance}<cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${item.impuesto}</cbc:TaxAmount>${subtotal(line, true)}</cac:TaxTotal><cac:Item><cbc:Description>${x(item.descripcion)}</cbc:Description><cac:SellersItemIdentification><cbc:ID>${index + 1}</cbc:ID></cac:SellersItemIdentification></cac:Item><cac:Price><cbc:PriceAmount currencyID="PEN">${item.precioUnitario}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-  })
-  .join('\n')}
+${lines.map(buildInvoiceLine).join('\n')}
 </Invoice>`;
   return {
     ambiente: config.environment,

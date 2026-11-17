@@ -21,6 +21,6 @@ try {
     { flag: 'wx', mode: 0o600 },
   );
   console.log(
-    'Configuracion creada. Consulte .local/ACCESO_LOCAL.md para ingresar. No comparta ese archivo.',
+    'Configuracion creada desde una plantilla sin valores. Complete .env antes de iniciar, incluidos puertos, tiempos, conexion, correo y SUNAT. Consulte .local/ACCESO_LOCAL.md para ingresar. No comparta ese archivo.',
   );
 }

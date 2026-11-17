@@ -17,8 +17,7 @@ export function createProcesamientoService({
     // HACE: pregunta el diario SUNAT. Si no hay respuesta, pide la emision. Despues elige rechazo o aceptacion.
     // CONTINUA EN: sunat.service.js -> consultarResultado() y, si falta, solicitarEmision().
     const previous = await provider.consultarResultado(record.id);
-    const result =
-      previous ?? (await provider.solicitarEmision(record.payload, record.id, record.intentos));
+    const result = previous ?? (await provider.solicitarEmision(record.payload, record.id, record.intentos));
 
     if (!result || result.estado === 'PENDIENTE') {
       if (result?.esperaCapacidad) await model.defer(record);
@@ -83,7 +82,7 @@ export function createProcesamientoService({
   }
 
   return {
-    async process(record) {
+    async process(record) {   
       // FASE 2/6. Punto de entrada de una compra ya reservada.
       // LLAMADO POR: workers/procesamiento.worker.js -> emit().
       // HACE: si falta la respuesta SUNAT, la confirma; si ya existe, solo recupera los documentos.

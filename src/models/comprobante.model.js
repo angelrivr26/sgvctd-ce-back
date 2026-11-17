@@ -40,7 +40,7 @@ export function createComprobanteModel(database) {
   }
   return {
     get,
-    async receive(payload, actor = 'BOLETOS') {
+    async receive(payload, actor = 'BOLETOS') {  // guardar la compra una sola vez, incluso si llegan solicitudes duplicadas al mismo tiempo
       // FASE 1/6. Fin de la recepcion HTTP.
       // LLAMADO POR: services/comprobante.service.js -> receive().
       // HACE: inserta la compra. Si eventoId o compraId ya existen con el mismo contenido, devuelve la fila anterior.
@@ -159,8 +159,7 @@ export function createComprobanteModel(database) {
       return database.transaction((tx) =>
         tx.query(
           `WITH candidates AS (
-        SELECT id FROM comprobantes
-        WHERE (estado='PENDIENTE' AND proximo_intento <= $2)
+        SELECT id FROM comprobantes WHERE (estado='PENDIENTE' AND proximo_intento <= $2)
            OR (estado='PROCESANDO' AND reserva_hasta < $2)
         ORDER BY proximo_intento,creado_en,id FOR UPDATE SKIP LOCKED LIMIT $1
       ) UPDATE comprobantes c SET estado='PROCESANDO',intentos=c.intentos+1,

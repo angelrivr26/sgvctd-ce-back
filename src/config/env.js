@@ -7,7 +7,7 @@ export function loadConfig(overrides = {}) {
   const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
   if (nodeMajor !== 20 || nodeMinor < 12)
     throw new Error('Este backend requiere Node.js 20.12 o superior dentro de la rama 20.');
-  const envPath = resolve('.env');
+  const envPath = resolve(process.env.COMPROBANTES_ENV_FILE || '.env');
   if (existsSync(envPath) && !process.env.COMPROBANTES_SKIP_ENV) process.loadEnvFile(envPath);
   const env = { ...process.env, ...overrides };
   const integer = (name, fallback, min, max) => {
@@ -78,8 +78,6 @@ export function loadConfig(overrides = {}) {
   config.databaseSchema = databaseSchema(config);
   if (config.leaseSeconds * 1000 <= config.sunat.timeoutMs + 5000)
     throw new Error('WORKER_LEASE_SECONDS debe superar SUNAT_TIMEOUT_MS en mas de 5 segundos.');
-  if (config.environment === 'production' && config.sunat.environment !== 'production')
-    throw new Error('NODE_ENV=production requiere SUNAT_ENV=production.');
   if (config.integrationKey.length < 32 || !config.adminPasswordHash)
     throw new Error('Ejecute npm run setup:local para configurar el acceso.');
   if (config.callbackUrl) {

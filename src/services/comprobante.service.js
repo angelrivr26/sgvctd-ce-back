@@ -31,10 +31,9 @@ export function presentComprobante(record) {
 export function createComprobanteService(model, documentos) {
   return {
     async receive(input, actor) {
-      // FASE 1/6: validacion del contrato de entrada.
-      // LLAMADO POR: controllers/comprobante.controller.js -> receive().
-      // HACE: valida el contrato de la compra. Si el JSON es invalido, no se guarda nada.
-      // CONTINUA EN: models/comprobante.model.js -> receive().
+      // FASE 1/6: recibe y valida la compra antes de guardarla.
+      // LLAMADO POR: controllers/comprobante.controller.js -> receive(), ruta POST /compras.
+      // CONTINUA EN: models/comprobante.model.js -> receive(); luego el controlador responde 202.
       const payload = compraSchema.parse(input);
       const { record, duplicate } = await model.receive(payload, actor);
       return { comprobante: presentComprobante(record), duplicado: duplicate };
