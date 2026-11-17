@@ -185,7 +185,9 @@ function buildParty(name, documentType, number, address, config, issuer = false)
     ? `<cac:RegistrationAddress><cac:AddressLine><cbc:Line>${x(address)}</cbc:Line></cac:AddressLine><cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country></cac:RegistrationAddress>`
     : '';
 
-  return `<cac:Party><cac:PartyTaxScheme><cbc:RegistrationName>${x(name)}</cbc:RegistrationName><cbc:CompanyID ${documentAttributes}>${x(number)}</cbc:CompanyID>${fiscalAddress}<cac:TaxScheme><cbc:ID>-</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${legalAddress}</cac:PartyLegalEntity></cac:Party>`;
+  const identification = `<cac:PartyIdentification><cbc:ID ${documentAttributes}>${x(number)}</cbc:ID></cac:PartyIdentification>`;
+
+  return `<cac:Party>${identification}<cac:PartyTaxScheme><cbc:RegistrationName>${x(name)}</cbc:RegistrationName><cbc:CompanyID ${documentAttributes}>${x(number)}</cbc:CompanyID>${fiscalAddress}<cac:TaxScheme><cbc:ID>-</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>${x(name)}</cbc:RegistrationName>${legalAddress}</cac:PartyLegalEntity></cac:Party>`;
 }
 
 function buildInvoiceLine(line, index) {

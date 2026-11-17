@@ -801,3 +801,10 @@ Cada cambio en `backend-comprobantes/` o `frontend-comprobantes/` debe actualiza
 - **Motivo:** evitar rechazos por una estructura UBL incompleta y no registrar una falla tecnica SOAP como rechazo tributario. La conciliacion impide reenviar a ciegas una factura cuyo resultado de red sea incierto.
 - **Validacion:** 25 pruebas automatizadas aprobadas y `node scripts/check.js` aprobado con sintaxis de 55 archivos. Se agregaron verificaciones de `ProfileID`, catalogos 01, 06 y 07, `PartyTaxScheme`, ausencia del antiguo `listID="0101"` y prefijos de series. Formato y `git diff --check` verificados.
 - **Limitaciones:** no se realizo una emision real porque el entorno no contiene credenciales ni certificado productivos. El flujo productivo de boletas necesita implementar y probar `SummaryDocuments`, `sendSummary` y consulta por ticket; hasta entonces se rechaza antes de contactar SUNAT. Quedan pendientes la validacion local contra los XSD/reglas vigentes y la validacion criptografica de la firma recibida en la CDR.
+
+# Identificacion documental del emisor SUNAT (2026-11-16)
+
+- **Alcance:** se incorpora `PartyIdentification/ID` con `schemeID="6"` y atributos del catalogo 06 antes de `PartyTaxScheme`, tanto para el emisor como para el comprador.
+- **Motivo:** SUNAT beta devolvio el codigo `1008` para la compra 57976 porque la adecuacion anterior habia reemplazado ese nodo en lugar de conservarlo junto con `PartyTaxScheme`.
+- **Validacion:** la prueba de contrato comprueba la ruta completa `AccountingSupplierParty/Party/PartyIdentification/ID`, el RUC ficticio y el tipo de documento 6; se ejecutaron las pruebas y verificaciones del proyecto.
+- **Limitaciones:** el intento fallido de la compra 57976 conserva el XML y la respuesta SOAP anteriores como evidencia. Para probar la correccion debe generarse una nueva solicitud fiscal controlada; no se debe reenviar el XML guardado.
