@@ -60,9 +60,8 @@ export function loadConfig(overrides = {}) {
     }),
     sunat: parseSunatConfig(env),
     integrationKey: env.INTEGRATION_API_KEY || '',
-    adminUsername: env.ADMIN_USERNAME || 'contador',
-    adminPasswordHash: env.ADMIN_PASSWORD_HASH || '',
-    sessionHours: integer('SESSION_HOURS', 8, 1, 24),
+    adminUsername: env.ADMIN_USERNAME?.trim() || '',
+    adminPassword: env.ADMIN_PASSWORD || '',
     workerConcurrency: integer('WORKER_CONCURRENCY', 2, 1, 10),
     workerIntervalMs: integer('WORKER_INTERVAL_MS', 1000, 100, 60000),
     leaseSeconds: integer('WORKER_LEASE_SECONDS', 60, 15, 600),
@@ -78,8 +77,10 @@ export function loadConfig(overrides = {}) {
   config.databaseSchema = databaseSchema(config);
   if (config.leaseSeconds * 1000 <= config.sunat.timeoutMs + 5000)
     throw new Error('WORKER_LEASE_SECONDS debe superar SUNAT_TIMEOUT_MS en mas de 5 segundos.');
-  if (config.integrationKey.length < 32 || !config.adminPasswordHash)
-    throw new Error('Ejecute npm run setup:local para configurar el acceso.');
+  if (config.integrationKey.length < 32)
+    throw new Error('Ejecute npm run setup:local para configurar la clave de integracion.');
+  if (!config.adminUsername || !config.adminPassword)
+    throw new Error('Faltan ADMIN_USERNAME o ADMIN_PASSWORD para configurar el acceso.');
   if (config.callbackUrl) {
     const url = new URL(config.callbackUrl);
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);

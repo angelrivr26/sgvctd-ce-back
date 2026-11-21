@@ -64,5 +64,5 @@ export function createApplication(
     entregas,
     config,
   });
-  return { auth: createAuthService(database, config), comprobantes, correo, worker };
+  return { auth: createAuthService(config), comprobantes, correo, worker };
 }

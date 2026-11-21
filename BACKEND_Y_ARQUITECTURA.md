@@ -62,7 +62,7 @@ El panel de comprobantes conserva las operaciones necesarias para su tabla y det
 - `POST /api/v1/comprobantes/{id}/reenviar-correo`: nueva entrega de correo.
 - `POST /api/v1/comprobantes/{id}/reintentar-entregas`: reintento de entregas pendientes.
 
-Estas rutas requieren una sesion humana. La integracion entre backends utiliza `X-API-Key` y las
+Estas rutas requieren autenticacion humana HTTP Basic. La integracion entre backends utiliza `X-API-Key` y las
 rutas separadas bajo `/api/v1/integraciones/boletos`.
 
 ## Estados y recuperacion
@@ -91,7 +91,6 @@ iniciar; `verifyDatabaseSchema()` solo verifica que el esquema este completo.
 | `documentos`    | Metadatos y hashes de PDF/XML/CDR.                    |
 | `entregas`      | Correo y callback con reservas y reintentos.          |
 | `auditoria`     | Acciones relevantes del proceso.                      |
-| `sesiones`      | Acceso del panel humano.                              |
 
 `DB_DRIVER=pglite` se reserva para desarrollo y pruebas internas. El despliegue compartido debe usar
 PostgreSQL con un esquema propio de Comprobantes. Los documentos se guardan en `./documentos`; los
@@ -111,7 +110,8 @@ plantilla conserva paginacion, detalle, totales e importe en letras.
 
 - El proyecto exige Node.js `>=20.12 <21`.
 - `X-API-Key` protege la integracion con Boletos.
-- La interfaz humana usa cookie `HttpOnly`, sesion persistida y validacion de origen.
+- La interfaz humana compara `ADMIN_USERNAME` y `ADMIN_PASSWORD` del entorno mediante HTTP Basic,
+  con validacion de origen en las acciones que modifican datos.
 - XML, ZIP y respuestas tienen limites de tamano y validacion de contenido.
 - Certificados, claves, datos locales y documentos no se versionan.
 - Las descargas verifican SHA-256 antes de responder.

@@ -6,6 +6,7 @@ export function createAuthRouter(controller, middleware) {
   const limit = rateLimit({
     windowMs: 15 * 60000,
     limit: 10,
+    skipSuccessfulRequests: true,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: {
@@ -17,6 +18,5 @@ export function createAuthRouter(controller, middleware) {
   });
   router.post('/sesion', limit, controller.login);
   router.get('/sesion', middleware.session, controller.me);
-  router.delete('/sesion', middleware.session, controller.logout);
   return router;
 }

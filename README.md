@@ -52,9 +52,13 @@ npm run sunat:diagnostico
 Consulte [.env.example](.env.example) para todas las variables.
 
 `.env.example` contiene los nombres con valores vacios; no se carga al ejecutar la aplicacion.
-Los valores de desarrollo se completan en `.env`. `setup:local` copia esa plantilla y genera
-las claves de acceso, pero requiere completar la configuracion antes de iniciar, incluidos los
+Los valores de desarrollo se completan en `.env`. `setup:local` copia esa plantilla y genera las
+credenciales locales de acceso, pero requiere completar la configuracion antes de iniciar, incluidos los
 campos numericos de puertos, tiempos y concurrencia. Si `.env` ya existe, no lo sobrescribe.
+
+El panel humano usa `ADMIN_USERNAME` y `ADMIN_PASSWORD` del archivo de entorno. El navegador
+conserva la credencial solo en memoria y la envia mediante autenticacion HTTP Basic en cada
+consulta protegida; al recargar la pagina debe ingresar nuevamente. Use HTTPS fuera de loopback.
 
 La precedencia es: valores proporcionados por las pruebas, entorno del proceso y archivo seleccionado.
 SUNAT requiere ambiente, URL, usuario, clave, series y codigo de local explicitos; si falta alguno,

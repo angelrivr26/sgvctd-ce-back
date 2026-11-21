@@ -74,11 +74,9 @@ CREATE TABLE IF NOT EXISTS auditoria (
   creado_en timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS sesiones (
-  token_hash varchar(64) PRIMARY KEY,
-  usuario varchar(80) NOT NULL,
-  expira_en timestamptz NOT NULL
-);
+-- El acceso humano usa autenticacion HTTP Basic contra variables de entorno.
+-- La tabla historica no contiene usuarios ni es necesaria para el nuevo flujo.
+DROP TABLE IF EXISTS sesiones;
 
 CREATE SEQUENCE IF NOT EXISTS sunat_numero_seq MINVALUE 1 MAXVALUE 99999999 NO CYCLE;
 CREATE TABLE IF NOT EXISTS sunat_envios (

@@ -1,6 +1,5 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { hashPassword } from '../src/utils/security.js';
 
 try {
   await access('.env');
@@ -12,7 +11,8 @@ try {
   const template = await readFile('.env.example', 'utf8');
   const configuration = template
     .replace(/^INTEGRATION_API_KEY=$/m, `INTEGRATION_API_KEY=${integrationKey}`)
-    .replace(/^ADMIN_PASSWORD_HASH=$/m, `ADMIN_PASSWORD_HASH=${hashPassword(password)}`);
+    .replace(/^ADMIN_USERNAME=$/m, 'ADMIN_USERNAME=contador')
+    .replace(/^ADMIN_PASSWORD=$/m, `ADMIN_PASSWORD=${password}`);
   await mkdir('.local', { recursive: true });
   await writeFile('.env', configuration, { flag: 'wx', mode: 0o600 });
   await writeFile(

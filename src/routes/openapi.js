@@ -20,7 +20,7 @@ export const openApiDocument = {
   components: {
     securitySchemes: {
       integrationKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
-      session: { type: 'apiKey', in: 'cookie', name: 'comprobantes_session' },
+      panelBasic: { type: 'http', scheme: 'basic' },
     },
     schemas: {
       Compra: z.toJSONSchema(compraSchema, { io: 'input' }),

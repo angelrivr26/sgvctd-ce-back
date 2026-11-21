@@ -18,9 +18,8 @@ export function createApp({ services, database, config }) {
   app.use(
     cors({
       origin: config.appOrigin,
-      credentials: true,
       methods: ['GET', 'POST'],
-      allowedHeaders: ['Content-Type', 'X-API-Key'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-API-Key'],
     }),
   );
   app.use((req, res, next) => {

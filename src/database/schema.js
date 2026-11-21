@@ -36,7 +36,6 @@ export async function verifyDatabaseSchema(database) {
     'comprobantes',
     'documentos',
     'entregas',
-    'sesiones',
     'sunat_control',
     'sunat_envios',
   ];

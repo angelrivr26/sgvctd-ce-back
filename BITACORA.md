@@ -1,5 +1,21 @@
 # Bitacora de cambios — Comprobantes electronicos
 
+## 2026-11-20 - Acceso humano sin sesiones persistidas
+
+- **Alcance:** el panel valida `ADMIN_USERNAME` y `ADMIN_PASSWORD` directamente desde el entorno
+  mediante autenticacion HTTP Basic. Se retiran tokens, cookies, vencimiento de sesiones, la ruta
+  de cierre remoto y la tabla `sesiones`; el script SQL elimina esa tabla si existe. El frontend
+  conserva la credencial solo en memoria y muestra un mensaje generico junto al formulario cuando
+  el acceso es incorrecto.
+- **Motivo:** simplificar el acceso de una aplicacion desplegada en una zona segura, sin modificar
+  la integracion con Boletos, el procesamiento asincrono, los documentos ni las rutas del panel.
+- **Validacion:** se agrego una prueba del contrato de login, credenciales invalidas, ausencia de
+  cookie y consulta autenticada. `npm test` aprobo 26/26 pruebas, `npm run check` verifico 56
+  archivos y el build de produccion del frontend aprobo. Se revisaron formato y espacios del diff.
+- **Limitaciones:** al recargar la pagina se debe ingresar nuevamente. HTTP Basic requiere HTTPS
+  fuera de loopback y no permite revocar una credencial por navegador sin cambiar la clave del
+  entorno.
+
 ## 2026-11-16 - Configuracion SUNAT por URL
 
 - Alcance: se retiro `SUNAT_ENV`. La aplicacion toma el destino exclusivamente de `SUNAT_URL`: beta en desarrollo y produccion en el despliegue segun la URL configurada. La etiqueta interna necesaria para las reglas tecnicas de beta se deriva de la URL de SUNAT, sin exigir otra variable de entorno.
